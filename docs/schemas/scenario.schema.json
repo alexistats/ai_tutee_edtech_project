@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScenarioConfig",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "subskills",
+    "misconceptions",
+    "tasks",
+    "criteria",
+    "student_config"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "subskills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 2,
+      "maxItems": 6,
+      "uniqueItems": true
+    },
+    "misconceptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 320
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "student_config": {
+      "type": "object",
+      "required": [
+        "knowledge_level",
+        "target_subskills",
+        "misconceptions",
+        "release_answers_policy",
+        "tone",
+        "turn_budget"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "knowledge_level": {
+          "type": "string",
+          "enum": [
+            "beginner",
+            "intermediate"
+          ]
+        },
+        "target_subskills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "misconceptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "release_answers_policy": {
+          "type": "string",
+          "enum": [
+            "withhold_solution",
+            "guided_steps",
+            "full_solution_ok"
+          ]
+        },
+        "tone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "turn_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+name: chart_to_task
+description: Guides the student to align a teacher’s analytical intent with an appropriate visualization family.
+subskills:
+  - identify_task_intent
+  - match_comparison_tasks_to_bars_or_columns
+  - match_trend_tasks_to_lines_or_areas
+  - select_distribution_views_for_spread
+misconceptions:
+  - confuse_rank_with_trend
+  - assume_one_chart_fits_all_tasks
+  - ignore_distribution_needs
+tasks:
+  - A teacher wants students to compare sales across five regions in one month. How would you confirm the analytic task before proposing visuals?
+  - Someone suggests a pie chart to show whether customer satisfaction is improving. What questions help you test if that chart serves the task?
+  - You are asked to reveal the spread of delivery times, but only an average is available. What follow-up would you pursue before recommending a chart?
+criteria:
+  - Student restates the analytic goal (comparison, trend, correlation, distribution, composition) before naming charts.
+  - Student links chart choices to the expressed task and flags mismatches.
+  - Student requests missing context needed to judge whether the chart will answer the question.
+student_config:
+  knowledge_level: beginner
+  target_subskills:
+    - identify_task_intent
+    - match_comparison_tasks_to_bars_or_columns
+    - select_distribution_views_for_spread
+  misconceptions:
+    - confuse_rank_with_trend
+    - assume_one_chart_fits_all_tasks
+  release_answers_policy: withhold_solution
+  tone: encouraging, concise, concrete
+  turn_budget: 7

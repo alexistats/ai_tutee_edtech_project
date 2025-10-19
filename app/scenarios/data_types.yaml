@@ -1,0 +1,31 @@
+name: data_types
+description: Guides the student to classify dataset fields by their measurement level before selecting visuals.
+subskills:
+  - distinguish_categorical_vs_numerical
+  - differentiate_ordinal_vs_nominal
+  - flag_identifier_fields
+  - separate_discrete_vs_continuous
+misconceptions:
+  - treat_ids_as_numeric_values
+  - assume_ordinal_behaves_like_continuous
+  - ignore_temporal_formatting
+tasks:
+  - Your dataset has columns `customer_id`, `signup_date`, `plan_type`, and `monthly_usage`. How would you describe each column's data type before picking a chart?
+  - A teammate encoded survey responses from "strongly disagree" to "strongly agree" as numbers 1–5. What clarifying question would you ask before analyzing them?
+  - You notice numeric department codes like 101, 102, 103. How can you confirm whether they're identifiers or continuous values for visualization?
+criteria:
+  - Student distinguishes between categorical, ordinal, and numeric fields with reasoning tied to the context.
+  - Student flags identifiers or codes that should not drive quantitative encodings.
+  - Student requests clarification whenever a column's data type is ambiguous.
+student_config:
+  knowledge_level: beginner
+  target_subskills:
+    - distinguish_categorical_vs_numerical
+    - differentiate_ordinal_vs_nominal
+    - flag_identifier_fields
+  misconceptions:
+    - treat_ids_as_numeric_values
+    - assume_ordinal_behaves_like_continuous
+  release_answers_policy: withhold_solution
+  tone: encouraging, concise, concrete
+  turn_budget: 7

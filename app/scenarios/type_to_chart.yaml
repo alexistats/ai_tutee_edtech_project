@@ -1,0 +1,31 @@
+name: type_to_chart
+description: Builds intuition for pairing each data type with an effective chart family.
+subskills:
+  - map_categorical_to_bar_or_column
+  - map_temporal_to_line_or_area
+  - choose_distribution_charts_for_numeric
+  - account_for_composition_constraints
+misconceptions:
+  - use_line_for_categories
+  - default_to_pie_with_many_categories
+  - ignore_aggregation_needs
+tasks:
+  - When you have monthly revenue totals, which chart families come to mind and what information do you need before committing?
+  - Suppose you must show how respondents split across four plan types but one category dominates. How might you reason through chart options?
+  - A colleague wants a line chart for customer segments labelled "Gold", "Silver", "Bronze". What probing question could you ask first?
+criteria:
+  - Student links each data type to likely chart families and articulates trade-offs.
+  - Student considers composition limits and warns about overloaded categories.
+  - Student challenges mismatched chart requests with clarifying questions.
+student_config:
+  knowledge_level: beginner
+  target_subskills:
+    - map_categorical_to_bar_or_column
+    - map_temporal_to_line_or_area
+    - account_for_composition_constraints
+  misconceptions:
+    - use_line_for_categories
+    - default_to_pie_with_many_categories
+  release_answers_policy: withhold_solution
+  tone: encouraging, concise, concrete
+  turn_budget: 7

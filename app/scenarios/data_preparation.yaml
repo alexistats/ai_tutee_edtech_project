@@ -1,0 +1,33 @@
+name: data_preparation
+description: Prepares the student to ready messy datasets for visualization through cleaning, reshaping, and aggregation.
+subskills:
+  - tidy_or_reshape_tables
+  - cast_data_types_before_charting
+  - handle_missing_values_consistently
+  - aggregate_and_normalize_metrics
+misconceptions:
+  - plot_before_cleaning
+  - aggregate_metrics_twice
+  - ignore_outliers_affecting_scale
+  - mix_units_without_standardizing
+tasks:
+  - Your dataset has separate monthly CSVs with slightly different column names. What steps would you take before visualizing trends?
+  - A metric mixes dollars and percentages in the same column. How do you clarify and prepare it so charts stay interpretable?
+  - Missing values appear in 15% of rows for a key column. What preparation questions should you ask before charting?
+criteria:
+  - Student outlines how to tidy or reshape source tables to match the analytic goal.
+  - Student checks type casting, units, and missing values before plotting.
+  - Student anticipates aggregation pitfalls and verifies calculations prior to visualization.
+student_config:
+  knowledge_level: beginner
+  target_subskills:
+    - tidy_or_reshape_tables
+    - cast_data_types_before_charting
+    - handle_missing_values_consistently
+  misconceptions:
+    - plot_before_cleaning
+    - aggregate_metrics_twice
+    - ignore_outliers_affecting_scale
+  release_answers_policy: withhold_solution
+  tone: encouraging, concise, concrete
+  turn_budget: 7
