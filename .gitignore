@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+.pyenv/
+.virtualenv/
+
+# OS / Editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local config & secrets
+.env
+.env.*
+!.env.example
+
+# Logs, runs, artifacts
+logs/*
+!logs/.gitkeep
+
+# Data dumps (if any)
+data/*
+!data/.gitkeep
+
+# Build / dist
+build/
+dist/
+*.log
