@@ -18,6 +18,9 @@ paths:
     - "data/"
     - "venv/"
     - ".env"
+  deny_read:
+    - ".env"
+    - ".env.*"
 
 # ---------- EXECUTION GUARDRAILS ----------
 exec:
