@@ -1,0 +1,577 @@
+import os
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import streamlit as st
+from dotenv import load_dotenv
+
+from app.util.io import ensure_logdir, load_yaml, write_json, write_jsonl
+from app.util.prompt_loader import fill_prompt, load_prompt
+from app.util.assessment import (
+    administer_test,
+    administer_enhanced_test,
+    calculate_improvement,
+    get_assessment_questions
+)
+
+# Load environment variables
+load_dotenv(override=False)
+
+# Constants
+DEFAULT_MODEL = "gpt-4.1-mini"
+DEFAULT_TONE = "encouraging, concise, concrete"
+DEFAULT_TURN_BUDGET = 7
+POLICY_HINT_TEMPLATE = "(Policy reminder: {policy}) "
+
+# Page configuration
+st.set_page_config(
+    page_title="AI Tutee - Learning by Teaching",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+def initialize_session_state():
+    """Initialize all session state variables."""
+    if "session_started" not in st.session_state:
+        st.session_state.session_started = False
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "log_records" not in st.session_state:
+        st.session_state.log_records = []
+    if "turn_counter" not in st.session_state:
+        st.session_state.turn_counter = 1
+    if "pre_test_completed" not in st.session_state:
+        st.session_state.pre_test_completed = False
+    if "pre_test_score" not in st.session_state:
+        st.session_state.pre_test_score = None
+    if "pre_test_answers" not in st.session_state:
+        st.session_state.pre_test_answers = None
+    if "post_test_score" not in st.session_state:
+        st.session_state.post_test_score = None
+    if "post_test_answers" not in st.session_state:
+        st.session_state.post_test_answers = None
+    if "show_results" not in st.session_state:
+        st.session_state.show_results = False
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = uuid.uuid4().hex[:8]
+    if "scenario_data" not in st.session_state:
+        st.session_state.scenario_data = None
+    if "scenario_name" not in st.session_state:
+        st.session_state.scenario_name = None
+    if "prompt_config" not in st.session_state:
+        st.session_state.prompt_config = None
+    if "system_prompt" not in st.session_state:
+        st.session_state.system_prompt = None
+
+
+def available_scenarios() -> List[str]:
+    """Get list of available scenario files."""
+    scenario_path = Path("app/scenarios")
+    if not scenario_path.exists():
+        return []
+    return sorted(path.stem for path in scenario_path.glob("*.yaml"))
+
+
+def get_scenario_display_name(scenario_key: str) -> str:
+    """Convert scenario key to display name."""
+    display_names = {
+        "data_types": "1. Identification of Data Types",
+        "type_to_chart": "2. Connecting Data Types to Charts",
+        "chart_to_task": "3. Matching Charts to Analytical Tasks",
+        "data_preparation": "4. Data Preparation for Visualization"
+    }
+    return display_names.get(scenario_key, scenario_key.replace("_", " ").title())
+
+
+def build_prompt_config(scenario: Dict, knowledge_level: str, policy: str) -> Dict[str, object]:
+    """Build configuration for the AI student prompt."""
+    student_config = scenario.get("student_config", {})
+    knowledge = knowledge_level or student_config.get("knowledge_level", "beginner")
+    policy = policy or student_config.get("release_answers_policy", "withhold_solution")
+    target_subskills = student_config.get("target_subskills") or scenario.get("subskills", [])
+    misconceptions = student_config.get("misconceptions") or scenario.get("misconceptions", [])
+    tone = student_config.get("tone", DEFAULT_TONE)
+    turn_budget = student_config.get("turn_budget", DEFAULT_TURN_BUDGET)
+
+    replacements = {
+        "KNOWLEDGE_LEVEL": knowledge,
+        "TARGET_SUBSKILLS": ", ".join(target_subskills),
+        "MISCONCEPTIONS": ", ".join(misconceptions),
+        "RELEASE_ANSWERS_POLICY": policy,
+        "TONE": tone,
+        "TURN_BUDGET": str(turn_budget),
+    }
+    return {
+        "replacements": replacements,
+        "knowledge": knowledge,
+        "policy": policy,
+        "tone": tone,
+        "turn_budget": turn_budget,
+        "target_subskills": target_subskills,
+        "misconceptions": misconceptions,
+    }
+
+
+def build_student_intro_context(scenario: Dict, prompt_meta: Dict[str, object]) -> str:
+    """Build the context for the AI student's introduction."""
+    description = scenario.get("description", "")
+    tasks = scenario.get("tasks", [])
+    target_subskills = [s.replace("_", " ") for s in prompt_meta.get("target_subskills", [])]
+    misconceptions = [m.replace("_", " ") for m in prompt_meta.get("misconceptions", [])]
+
+    scenario_focus = tasks[0] if tasks else ""
+    confusion = misconceptions[0] if misconceptions else (target_subskills[0] if target_subskills else "")
+
+    lines = [
+        "You are the AI student beginning a tutoring session.",
+        "Speak in the first person about what you do and do not understand.",
+    ]
+    if description:
+        lines.append(f"Your learning goal: {description}")
+    if scenario_focus:
+        lines.append(f"The teacher plans to discuss: {scenario_focus}")
+    if confusion:
+        lines.append(f"You feel unsure about {confusion}.")
+
+    lines.extend([
+        "Open with one concise clarifying question about what confuses you right now.",
+        "Ask for specific guidance tied to the scenario, and avoid referring to 'students' in the third person.",
+    ])
+    return " ".join(lines)
+
+
+def format_teacher_turn(base_text: str, policy: str) -> str:
+    """Format teacher input with policy hint."""
+    prefix = POLICY_HINT_TEMPLATE.format(policy=policy.replace("_", " "))
+    return f"{prefix}{base_text}" if base_text else prefix.rstrip()
+
+
+def call_model(messages: List[Dict[str, str]], model: str, temperature: float = 0.7) -> str:
+    """Call the OpenAI API to get AI student response."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        st.error("OPENAI_API_KEY is not set. Please configure it in your .env file.")
+        st.stop()
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            messages=messages,
+        )
+        content = response.choices[0].message.content or ""
+        return content.strip()
+    except ImportError:
+        st.error("openai package is not installed. Please run: pip install openai")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error calling OpenAI API: {e}")
+        st.stop()
+
+
+def log_message(role: str, content: str, turn_index: int, scenario_name: str, model: str,
+                policy: str, knowledge: str) -> None:
+    """Log a message to the session records."""
+    timestamp = datetime.now(timezone.utc).isoformat()
+    record = {
+        "role": role,
+        "content": content,
+        "turn_index": turn_index,
+        "scenario": scenario_name,
+        "model": model,
+        "policy": policy,
+        "knowledge_level": knowledge,
+        "timestamp": timestamp,
+    }
+    st.session_state.log_records.append(record)
+
+
+def start_session(scenario_name: str, knowledge_level: str, policy: str):
+    """Initialize a new teaching session."""
+    # Load scenario
+    scenario_path = Path("app/scenarios") / f"{scenario_name}.yaml"
+    if not scenario_path.exists():
+        st.error(f"Scenario file not found: {scenario_path}")
+        return
+
+    scenario = load_yaml(scenario_path)
+    st.session_state.scenario_data = scenario
+    st.session_state.scenario_name = scenario_name
+
+    # Build prompt configuration
+    prompt_config = build_prompt_config(scenario, knowledge_level, policy)
+    st.session_state.prompt_config = prompt_config
+
+    # Load and fill system prompt
+    template = load_prompt(Path("app/prompts/system_ai_student.md"))
+    system_prompt = fill_prompt(template, prompt_config["replacements"])
+    st.session_state.system_prompt = system_prompt
+
+    # Initialize messages with system prompt
+    st.session_state.messages = [{"role": "system", "content": system_prompt}]
+    model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+
+    # Log system message
+    log_message("system", system_prompt, 0, scenario_name, model,
+                prompt_config["policy"], prompt_config["knowledge"])
+
+    # Build intro context and get AI student's initial greeting
+    intro_context = format_teacher_turn(
+        build_student_intro_context(scenario, prompt_config),
+        prompt_config["policy"]
+    )
+    st.session_state.messages.append({"role": "user", "content": intro_context})
+    log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    # Get AI student's initial response
+    intro_reply = call_model(st.session_state.messages, model=model)
+    st.session_state.messages.append({"role": "assistant", "content": intro_reply})
+    log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    st.session_state.turn_counter += 1
+    st.session_state.session_started = True
+
+
+def send_teacher_message(teacher_input: str):
+    """Process teacher input and get AI student response."""
+    if not teacher_input.strip():
+        return
+
+    scenario_name = list(st.session_state.scenario_data.keys())[0] if isinstance(st.session_state.scenario_data, dict) and "name" not in st.session_state.scenario_data else st.session_state.scenario_data.get("name", "unknown")
+    model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+    prompt_config = st.session_state.prompt_config
+
+    # Format teacher message
+    teacher_message = format_teacher_turn(teacher_input, prompt_config["policy"])
+    st.session_state.messages.append({"role": "user", "content": teacher_message})
+    log_message("user", teacher_message, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    # Get AI student response
+    assistant_reply = call_model(st.session_state.messages, model=model)
+    st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+    log_message("assistant", assistant_reply, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    st.session_state.turn_counter += 1
+
+
+def save_session_logs():
+    """Save session logs to files."""
+    logdir = ensure_logdir(Path("logs/runs"))
+    scenario_name = st.session_state.scenario_data.get("name", "unknown")
+    run_prefix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + f"_{scenario_name}_{st.session_state.session_id}"
+
+    transcript_path = logdir / f"{run_prefix}.jsonl"
+    summary_path = logdir / f"{run_prefix}_summary.json"
+
+    # Write transcript
+    write_jsonl(transcript_path, st.session_state.log_records)
+
+    # Write summary
+    model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+    summary = {
+        "scenario": scenario_name,
+        "turns": st.session_state.turn_counter - 1,
+        "model": model,
+        "policy": st.session_state.prompt_config["policy"],
+        "knowledge_level": st.session_state.prompt_config["knowledge"],
+        "pre_test_score": st.session_state.pre_test_score,
+        "post_test_score": st.session_state.post_test_score,
+        "log_path": str(transcript_path),
+        "notes": "Streamlit UI session",
+    }
+    write_json(summary_path, summary)
+
+    return transcript_path
+
+
+def run_pre_test():
+    """Administer pre-test to the AI student."""
+    try:
+        model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+        answers, score = administer_test(
+            st.session_state.scenario_name,
+            st.session_state.messages,
+            st.session_state.system_prompt,
+            model=model
+        )
+        st.session_state.pre_test_score = score
+        st.session_state.pre_test_answers = answers
+        st.session_state.pre_test_completed = True
+        return True
+    except Exception as e:
+        st.error(f"Error running pre-test: {e}")
+        return False
+
+
+def run_post_test():
+    """Administer post-test to the AI student with conversation context."""
+    try:
+        model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+        answers, score = administer_enhanced_test(
+            st.session_state.scenario_name,
+            st.session_state.messages,
+            st.session_state.system_prompt,
+            model=model
+        )
+        st.session_state.post_test_score = score
+        st.session_state.post_test_answers = answers
+        return True
+    except Exception as e:
+        st.error(f"Error running post-test: {e}")
+        return False
+
+
+def main():
+    """Main Streamlit application."""
+    initialize_session_state()
+
+    # Sidebar configuration
+    with st.sidebar:
+        st.title("🎓 AI Tutee Configuration")
+        st.markdown("### Learning by Teaching")
+        st.markdown("---")
+
+        # Scenario selection
+        scenarios = available_scenarios()
+        if not scenarios:
+            st.error("No scenarios found in app/scenarios/")
+            st.stop()
+
+        scenario_options = {get_scenario_display_name(s): s for s in scenarios}
+        selected_display = st.selectbox(
+            "Select Teaching Scenario",
+            options=list(scenario_options.keys()),
+            disabled=st.session_state.session_started
+        )
+        selected_scenario = scenario_options[selected_display]
+
+        # Knowledge level selection
+        knowledge_level = st.selectbox(
+            "AI Student Knowledge Level",
+            options=["beginner", "intermediate", "advanced"],
+            disabled=st.session_state.session_started
+        )
+
+        # Policy selection (optional advanced setting)
+        with st.expander("Advanced Settings"):
+            policy = st.selectbox(
+                "Release Answers Policy",
+                options=["withhold_solution", "guided_steps", "full_solution_ok"],
+                help="Controls how the AI student approaches providing solutions"
+            )
+
+        st.markdown("---")
+
+        # Session controls
+        if not st.session_state.session_started:
+            if st.button("🚀 Start Teaching Session", type="primary", use_container_width=True):
+                start_session(selected_scenario, knowledge_level, policy)
+                st.rerun()
+        else:
+            if st.button("🔄 Reset Session", type="secondary", use_container_width=True):
+                # Save logs before resetting
+                save_session_logs()
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📊 Session Info")
+            st.metric("Turns", st.session_state.turn_counter - 1)
+            st.metric("Messages", len([m for m in st.session_state.messages if m["role"] != "system"]))
+
+    # Main content area
+    if not st.session_state.session_started:
+        # Welcome screen
+        st.title("🎓 Welcome to AI Tutee")
+        st.markdown("""
+        ## Learning by Teaching Data Visualization
+
+        This tool helps you practice teaching data visualization concepts by interacting with an AI student.
+
+        ### How it works:
+        1. **Select a scenario** from the sidebar (choose one of the four core skills)
+        2. **Set the knowledge level** for your AI student (beginner, intermediate, or advanced)
+        3. **Start the session** and guide the AI student through the learning process
+        4. The AI student will ask questions and make mistakes for you to correct
+        5. **Complete the session** to see how much your student learned!
+
+        ### Teaching Scenarios:
+        - **Identification of Data Types**: Help the AI student recognize categorical, numerical, and temporal data
+        - **Connecting Data Types to Charts**: Teach when to use different chart types based on data
+        - **Matching Charts to Analytical Tasks**: Guide the student in selecting charts for specific analysis goals
+        - **Data Preparation**: Instruct on cleaning and preparing data for visualization
+
+        ### Ready to begin?
+        Configure your session in the sidebar and click "Start Teaching Session"!
+        """)
+
+        st.info("💡 **Tip**: The AI student learns best when you explain concepts clearly and correct misconceptions patiently!")
+
+    else:
+        # Check if results should be displayed
+        if st.session_state.show_results:
+            # Display results page
+            st.title("📊 Teaching Session Results")
+
+            # Calculate improvement
+            if st.session_state.pre_test_score is not None and st.session_state.post_test_score is not None:
+                improvement = calculate_improvement(
+                    st.session_state.pre_test_score,
+                    st.session_state.post_test_score
+                )
+
+                # Display summary metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Pre-Test Score", f"{improvement['pre_test_score']:.1f}%")
+                with col2:
+                    st.metric("Post-Test Score", f"{improvement['post_test_score']:.1f}%",
+                             delta=f"{improvement['improvement']:.1f}%")
+                with col3:
+                    learning_status = "✅ Learned!" if improvement['learned'] else "📚 Needs More Practice"
+                    st.metric("Learning Status", learning_status)
+
+                # Show improvement message
+                if improvement['learned']:
+                    st.success(f"""
+                    ### Excellent Teaching! 🎉
+
+                    Your AI student showed significant improvement, gaining **{improvement['improvement']:.1f} points**!
+                    The concepts covered in this session were successfully understood.
+                    """)
+                else:
+                    st.info(f"""
+                    ### Session Complete
+
+                    Your AI student's score changed by **{improvement['improvement']:.1f} points**.
+                    Consider reviewing the concepts or trying a different teaching approach.
+                    """)
+
+                # Display detailed results in tabs
+                tab1, tab2 = st.tabs(["📋 Pre-Test Results", "📋 Post-Test Results"])
+
+                with tab1:
+                    st.markdown("### Pre-Test Responses")
+                    if st.session_state.pre_test_answers:
+                        for i, qa in enumerate(st.session_state.pre_test_answers, 1):
+                            with st.expander(f"Question {i} (Score: {qa['score']:.0f}%)"):
+                                st.markdown(f"**Question:** {qa['question']}")
+                                st.markdown(f"**AI Student's Answer:** {qa['answer']}")
+                                st.markdown(f"**Ideal Answer:** {qa['ideal_answer']}")
+                                if 'concepts_found' in qa:
+                                    st.markdown(f"**Key Concepts Found:** {qa['concepts_found']}/{len(qa['key_concepts'])}")
+
+                with tab2:
+                    st.markdown("### Post-Test Responses")
+                    if st.session_state.post_test_answers:
+                        for i, qa in enumerate(st.session_state.post_test_answers, 1):
+                            with st.expander(f"Question {i} (Score: {qa['score']:.0f}%)"):
+                                st.markdown(f"**Question:** {qa['question']}")
+                                st.markdown(f"**AI Student's Answer:** {qa['answer']}")
+                                st.markdown(f"**Ideal Answer:** {qa['ideal_answer']}")
+                                if 'concepts_found' in qa:
+                                    st.markdown(f"**Key Concepts Found:** {qa['concepts_found']}/{len(qa['key_concepts'])}")
+
+            # Button to start new session
+            st.markdown("---")
+            if st.button("🔄 Start New Session", type="primary", use_container_width=True):
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+
+        else:
+            # Chat interface
+            st.title(f"Teaching: {get_scenario_display_name(selected_scenario)}")
+
+            # Display scenario description
+            if st.session_state.scenario_data:
+                description = st.session_state.scenario_data.get("description", "")
+                if description:
+                    st.info(f"**Learning Goal**: {description}")
+
+            # Pre-test prompt if not completed
+            if not st.session_state.pre_test_completed:
+                st.warning("""
+                ### 📝 Pre-Test Recommended
+
+                Before you begin teaching, you can optionally run a pre-test to assess your AI student's
+                initial knowledge. This will help measure learning progress at the end of the session.
+                """)
+
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if st.button("📝 Run Pre-Test", type="primary", use_container_width=True):
+                        with st.spinner("Administering pre-test..."):
+                            if run_pre_test():
+                                st.success(f"Pre-test complete! Initial score: {st.session_state.pre_test_score:.1f}%")
+                                st.rerun()
+                with col2:
+                    if st.button("Skip Pre-Test", type="secondary", use_container_width=True):
+                        st.session_state.pre_test_completed = True
+                        st.rerun()
+
+                st.markdown("---")
+
+            # Display chat messages
+            st.markdown("### 💬 Conversation")
+            chat_container = st.container()
+
+            with chat_container:
+                # Display all messages except system prompt
+                for message in st.session_state.messages:
+                    if message["role"] == "system":
+                        continue
+                    elif message["role"] == "assistant":
+                        with st.chat_message("assistant", avatar="🤖"):
+                            st.markdown(message["content"])
+                    elif message["role"] == "user":
+                        # Extract actual teacher input (remove policy hint)
+                        content = message["content"]
+                        if content.startswith("(Policy reminder:"):
+                            content = content.split(")", 1)[1].strip() if ")" in content else content
+                        with st.chat_message("user", avatar="👨‍🏫"):
+                            st.markdown(content)
+
+            # Teacher input (only show if pre-test is handled)
+            if st.session_state.pre_test_completed:
+                teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
+                if teacher_input:
+                    send_teacher_message(teacher_input)
+                    st.rerun()
+
+                # End session controls
+                st.markdown("---")
+                st.markdown("### Session Controls")
+
+                col1, col2 = st.columns([1, 1])
+
+                with col1:
+                    if st.button("🏁 End Session & Run Post-Test", type="primary", use_container_width=True):
+                        with st.spinner("Running post-test and calculating results..."):
+                            # Run post-test
+                            if run_post_test():
+                                # Save logs
+                                log_path = save_session_logs()
+                                st.session_state.show_results = True
+                                st.rerun()
+
+                with col2:
+                    if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
+                        log_path = save_session_logs()
+                        st.success(f"Session saved! Logs: {log_path}")
+                        st.balloons()
+
+
+if __name__ == "__main__":
+    main()
