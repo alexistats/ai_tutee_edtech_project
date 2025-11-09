@@ -1,8 +1,14 @@
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import streamlit as st
 from dotenv import load_dotenv
