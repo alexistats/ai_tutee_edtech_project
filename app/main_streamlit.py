@@ -144,7 +144,8 @@ def build_student_intro_context(scenario: Dict, prompt_meta: Dict[str, object]) 
         lines.append(f"You feel unsure about {confusion}.")
 
     lines.extend([
-        "Open with one concise clarifying question about what confuses you right now.",
+        "Open with ONE concise clarifying question about what confuses you right now.",
+        "IMPORTANT: Ask only ONE question. Do not ask multiple questions.",
         "Ask for specific guidance tied to the scenario, and avoid referring to 'students' in the third person.",
     ])
     return " ".join(lines)
