@@ -839,36 +839,41 @@ def main():
 
                         result_emoji = "✓" if is_correct else "✗"
 
-                        # Create a container for each question
+                        # Create a container for each question with border
                         with st.container():
                             st.markdown(f"""
-                            <div style="border-left: 4px solid {border_color}; padding-left: 10px; margin-bottom: 15px;">
+                            <div style="border-left: 4px solid {border_color}; padding-left: 10px; margin-bottom: 10px;">
                             """, unsafe_allow_html=True)
 
-                            st.markdown(f"**{status_emoji} Q{q_num}** [{result_emoji}]")
-                            st.markdown(f"*{qa['question']}*")
+                            # Use expander for each question - expand current question by default
+                            expander_label = f"{status_emoji} Q{q_num} [{result_emoji}]"
+                            with st.expander(expander_label, expanded=is_current):
+                                st.markdown(f"**Question:**")
+                                st.markdown(f"*{qa['question']}*")
+                                st.markdown("")
 
-                            # Display answer choices
-                            if 'options' in qa:
-                                st.markdown("**Choices:**")
-                                for opt_key, opt_text in sorted(qa['options'].items()):
-                                    # Highlight selected and correct answers
-                                    selected = qa.get('selected_answer', '')
-                                    correct = qa.get('correct_answer', '')
+                                # Display answer choices
+                                if 'options' in qa:
+                                    st.markdown("**Choices:**")
+                                    for opt_key, opt_text in sorted(qa['options'].items()):
+                                        # Highlight selected and correct answers
+                                        selected = qa.get('selected_answer', '')
+                                        correct = qa.get('correct_answer', '')
 
-                                    if opt_key == selected and opt_key == correct:
-                                        st.markdown(f"  ✓ **{opt_key})** {opt_text}")
-                                    elif opt_key == selected:
-                                        st.markdown(f"  ❌ **{opt_key})** {opt_text}")
-                                    elif opt_key == correct:
-                                        st.markdown(f"  ✓ {opt_key}) {opt_text}")
-                                    else:
-                                        st.markdown(f"  {opt_key}) {opt_text}")
+                                        if opt_key == selected and opt_key == correct:
+                                            st.markdown(f"✓ **{opt_key})** {opt_text}")
+                                        elif opt_key == selected:
+                                            st.markdown(f"❌ **{opt_key})** {opt_text}")
+                                        elif opt_key == correct:
+                                            st.markdown(f"✓ {opt_key}) {opt_text}")
+                                        else:
+                                            st.markdown(f"{opt_key}) {opt_text}")
 
-                            # Show AI reasoning
-                            if qa.get('reasoning'):
-                                with st.expander("AI's Reasoning"):
-                                    st.markdown(f"_{qa['reasoning']}_")
+                                # Show AI reasoning
+                                if qa.get('reasoning'):
+                                    st.markdown("")
+                                    st.markdown("**AI's Initial Reasoning:**")
+                                    st.markdown(f"*{qa['reasoning']}*")
 
                             st.markdown("</div>", unsafe_allow_html=True)
                             st.markdown("---")
