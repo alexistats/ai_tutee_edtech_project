@@ -439,17 +439,39 @@ def administer_enhanced_test(
     if not questions:
         return [], 0.0
 
-    # Create test prompt with context
+    # Create a MODIFIED system prompt for post-test that emphasizes learning
+    # Replace misconception instructions with learning instructions
+    post_test_system_prompt = system_prompt.replace(
+        "You genuinely believe the misconceptions in {{MISCONCEPTIONS}}",
+        "You have been learning from the teacher and should UPDATE your beliefs based on what you were taught"
+    ).replace(
+        "These are not occasional mistakes—they are your actual understanding",
+        "Your understanding should now reflect the corrections and explanations the teacher provided"
+    ).replace(
+        "When taking assessments, answer based on these beliefs (which will lead to wrong answers)",
+        "When taking assessments, apply what you learned from the teacher during the session"
+    ).replace(
+        "At **beginner** level, you should get MOST questions wrong because your understanding is fundamentally flawed",
+        "At **beginner** level, you should show improvement on topics the teacher covered with you"
+    ).replace(
+        "Do NOT use outside knowledge or reasoning—stay in character as someone who genuinely holds these misconceptions",
+        "Apply the specific lessons and corrections the teacher taught you during this session"
+    )
+
+    # Create test prompt with strong learning emphasis
     mcq_prompt = format_mcq_prompt(questions)
     context_intro = (
-        "Based on what we've discussed in our teaching session, "
-        "please answer the following assessment questions.\n\n"
+        "IMPORTANT: This is a POST-TEST after our teaching session.\n\n"
+        "You should answer these questions using what the teacher TAUGHT you during our conversation. "
+        "If the teacher corrected a misconception you had, apply that correction now. "
+        "If the teacher explained a concept, use that explanation to guide your answers.\n\n"
+        "Review our recent conversation and apply those lessons to answer correctly.\n\n"
     )
     full_prompt = context_intro + mcq_prompt
 
-    # Include recent conversation for context (last 6 messages)
-    context_messages = [{"role": "system", "content": system_prompt}]
-    recent_history = [msg for msg in conversation_history if msg["role"] != "system"][-6:]
+    # Include ALL conversation for maximum context (not just last 6)
+    context_messages = [{"role": "system", "content": post_test_system_prompt}]
+    recent_history = [msg for msg in conversation_history if msg["role"] != "system"]
     context_messages.extend(recent_history)
     context_messages.append({"role": "user", "content": full_prompt})
 
