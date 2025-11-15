@@ -706,25 +706,12 @@ def main():
                         st.info(f"**Learning Goal**: {description}")
 
             with main_col:
-                # Display question-by-question progress
+                # Display compact progress bar
                 if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
                     total_questions = len(st.session_state.pre_test_answers)
                     addressed = len(st.session_state.questions_addressed)
-
-                    # Progress bar
                     progress = addressed / total_questions if total_questions > 0 else 0
-                    st.markdown(f"### 📝 Teaching Progress: {addressed}/{total_questions} Questions Covered")
-                    st.progress(progress)
-
-                    # Show current focus
-                    if st.session_state.current_question_focus:
-                        current_q = next((qa for qa in st.session_state.pre_test_answers
-                                         if qa.get('question_number') == st.session_state.current_question_focus), None)
-                        if current_q:
-                            st.info(f"**Currently Discussing:** Question {st.session_state.current_question_focus}")
-                    elif st.session_state.ready_for_post_test:
-                        st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
-
+                    st.progress(progress, text=f"Progress: {addressed}/{total_questions} questions covered")
                     st.markdown("---")
 
                 # Display chat messages
@@ -753,6 +740,50 @@ def main():
 
                             with st.chat_message("user", avatar="👨‍🏫"):
                                 st.markdown(content)
+
+                # Current question card - always visible above chat input
+                if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                    st.markdown("---")
+                    current_q = next((qa for qa in st.session_state.pre_test_answers
+                                     if qa.get('question_number') == st.session_state.current_question_focus), None)
+                    if current_q:
+                        q_num = current_q.get('question_number', 0)
+                        is_correct = current_q.get('is_correct', False)
+                        result_emoji = "✓" if is_correct else "✗"
+
+                        # Create a colored card for the current question
+                        st.markdown(f"""
+                        <div style="background-color: #e3f2fd; border-left: 5px solid #1976d2; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
+                            <h4 style="margin-top: 0; color: #1976d2;">🔵 Currently Working On: Question {q_num} [{result_emoji}]</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # Show question details in a compact format
+                        with st.expander("📖 View Question Details", expanded=True):
+                            st.markdown(f"**Question:** {current_q['question']}")
+
+                            if 'options' in current_q:
+                                st.markdown("**Answer Choices:**")
+                                cols = st.columns(1)
+                                selected = current_q.get('selected_answer', '')
+                                correct = current_q.get('correct_answer', '')
+
+                                for opt_key, opt_text in sorted(current_q['options'].items()):
+                                    if opt_key == selected and opt_key == correct:
+                                        st.markdown(f"✓ **{opt_key})** {opt_text} *(AI selected - Correct)*")
+                                    elif opt_key == selected:
+                                        st.markdown(f"❌ **{opt_key})** {opt_text} *(AI selected - Incorrect)*")
+                                    elif opt_key == correct:
+                                        st.markdown(f"✓ **{opt_key})** {opt_text} *(Correct answer)*")
+                                    else:
+                                        st.markdown(f"{opt_key}) {opt_text}")
+
+                            if current_q.get('reasoning'):
+                                st.markdown(f"**AI's Initial Reasoning:** *{current_q['reasoning']}*")
+
+                elif st.session_state.ready_for_post_test:
+                    st.markdown("---")
+                    st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
 
                 # Teacher input
                 teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
@@ -813,13 +844,14 @@ def main():
                         st.success(f"Session saved! Logs: {log_path}")
                         st.balloons()
 
-            # Right sidebar with pre-test questions
+            # Right sidebar with quick question overview
             with sidebar_col:
                 if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
-                    st.markdown("### 📋 Pre-Test Questions")
-                    st.markdown(f"**Score: {st.session_state.pre_test_score:.1f}%**")
+                    st.markdown("### 📋 All Questions")
+                    st.markdown(f"**Pre-Test Score: {st.session_state.pre_test_score:.1f}%**")
                     st.markdown("---")
 
+                    # Simple list view - compact overview
                     for qa in st.session_state.pre_test_answers:
                         q_num = qa.get('question_number', 0)
                         is_correct = qa.get('is_correct', False)
@@ -829,54 +861,22 @@ def main():
                         # Question status styling
                         if is_current:
                             status_emoji = "🔵"
-                            border_color = "#1f77b4"
+                            bg_color = "#e3f2fd"
                         elif is_addressed:
                             status_emoji = "✅"
-                            border_color = "#2ecc71"
+                            bg_color = "#e8f5e9"
                         else:
                             status_emoji = "⏳"
-                            border_color = "#95a5a6"
+                            bg_color = "#f5f5f5"
 
                         result_emoji = "✓" if is_correct else "✗"
 
-                        # Create a container for each question with border
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="border-left: 4px solid {border_color}; padding-left: 10px; margin-bottom: 10px;">
-                            """, unsafe_allow_html=True)
-
-                            # Use expander for each question - expand current question by default
-                            expander_label = f"{status_emoji} Q{q_num} [{result_emoji}]"
-                            with st.expander(expander_label, expanded=is_current):
-                                st.markdown(f"**Question:**")
-                                st.markdown(f"*{qa['question']}*")
-                                st.markdown("")
-
-                                # Display answer choices
-                                if 'options' in qa:
-                                    st.markdown("**Choices:**")
-                                    for opt_key, opt_text in sorted(qa['options'].items()):
-                                        # Highlight selected and correct answers
-                                        selected = qa.get('selected_answer', '')
-                                        correct = qa.get('correct_answer', '')
-
-                                        if opt_key == selected and opt_key == correct:
-                                            st.markdown(f"✓ **{opt_key})** {opt_text}")
-                                        elif opt_key == selected:
-                                            st.markdown(f"❌ **{opt_key})** {opt_text}")
-                                        elif opt_key == correct:
-                                            st.markdown(f"✓ {opt_key}) {opt_text}")
-                                        else:
-                                            st.markdown(f"{opt_key}) {opt_text}")
-
-                                # Show AI reasoning
-                                if qa.get('reasoning'):
-                                    st.markdown("")
-                                    st.markdown("**AI's Initial Reasoning:**")
-                                    st.markdown(f"*{qa['reasoning']}*")
-
-                            st.markdown("</div>", unsafe_allow_html=True)
-                            st.markdown("---")
+                        # Compact display - just status, no details
+                        st.markdown(f"""
+                        <div style="background-color: {bg_color}; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
+                            <strong>{status_emoji} Q{q_num}</strong> [{result_emoji}]
+                        </div>
+                        """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
