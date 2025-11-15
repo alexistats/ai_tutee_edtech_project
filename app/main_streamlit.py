@@ -470,24 +470,76 @@ def main():
                 with tab1:
                     st.markdown("### Pre-Test Responses")
                     if st.session_state.pre_test_answers:
-                        for i, qa in enumerate(st.session_state.pre_test_answers, 1):
-                            with st.expander(f"Question {i} (Score: {qa['score']:.0f}%)"):
+                        correct_count = sum(1 for qa in st.session_state.pre_test_answers if qa.get('is_correct', False))
+                        total_count = len(st.session_state.pre_test_answers)
+                        st.info(f"**Score: {correct_count}/{total_count} correct ({correct_count/total_count*100:.0f}%)**")
+
+                        for qa in st.session_state.pre_test_answers:
+                            q_num = qa.get('question_number', 0)
+                            is_correct = qa.get('is_correct', False)
+                            status_icon = "✅" if is_correct else "❌"
+
+                            with st.expander(f"{status_icon} Question {q_num} - {'Correct' if is_correct else 'Incorrect'}"):
                                 st.markdown(f"**Question:** {qa['question']}")
-                                st.markdown(f"**AI Student's Answer:** {qa['answer']}")
-                                st.markdown(f"**Ideal Answer:** {qa['ideal_answer']}")
-                                if 'concepts_found' in qa:
-                                    st.markdown(f"**Key Concepts Found:** {qa['concepts_found']}/{len(qa['key_concepts'])}")
+
+                                # Display options
+                                if 'options' in qa:
+                                    st.markdown("**Options:**")
+                                    for opt_key, opt_text in sorted(qa['options'].items()):
+                                        st.markdown(f"   {opt_key}) {opt_text}")
+
+                                # Show answers
+                                selected = qa.get('selected_answer', 'N/A')
+                                correct = qa.get('correct_answer', 'N/A')
+
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**AI Student Selected:** {selected}")
+                                with col2:
+                                    st.markdown(f"**Correct Answer:** {correct}")
+
+                                # Show reasoning and explanation
+                                if qa.get('reasoning'):
+                                    st.markdown(f"**AI Student's Reasoning:** _{qa['reasoning']}_")
+
+                                st.markdown(f"**Explanation:** {qa.get('explanation', 'N/A')}")
 
                 with tab2:
                     st.markdown("### Post-Test Responses")
                     if st.session_state.post_test_answers:
-                        for i, qa in enumerate(st.session_state.post_test_answers, 1):
-                            with st.expander(f"Question {i} (Score: {qa['score']:.0f}%)"):
+                        correct_count = sum(1 for qa in st.session_state.post_test_answers if qa.get('is_correct', False))
+                        total_count = len(st.session_state.post_test_answers)
+                        st.info(f"**Score: {correct_count}/{total_count} correct ({correct_count/total_count*100:.0f}%)**")
+
+                        for qa in st.session_state.post_test_answers:
+                            q_num = qa.get('question_number', 0)
+                            is_correct = qa.get('is_correct', False)
+                            status_icon = "✅" if is_correct else "❌"
+
+                            with st.expander(f"{status_icon} Question {q_num} - {'Correct' if is_correct else 'Incorrect'}"):
                                 st.markdown(f"**Question:** {qa['question']}")
-                                st.markdown(f"**AI Student's Answer:** {qa['answer']}")
-                                st.markdown(f"**Ideal Answer:** {qa['ideal_answer']}")
-                                if 'concepts_found' in qa:
-                                    st.markdown(f"**Key Concepts Found:** {qa['concepts_found']}/{len(qa['key_concepts'])}")
+
+                                # Display options
+                                if 'options' in qa:
+                                    st.markdown("**Options:**")
+                                    for opt_key, opt_text in sorted(qa['options'].items()):
+                                        st.markdown(f"   {opt_key}) {opt_text}")
+
+                                # Show answers
+                                selected = qa.get('selected_answer', 'N/A')
+                                correct = qa.get('correct_answer', 'N/A')
+
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**AI Student Selected:** {selected}")
+                                with col2:
+                                    st.markdown(f"**Correct Answer:** {correct}")
+
+                                # Show reasoning and explanation
+                                if qa.get('reasoning'):
+                                    st.markdown(f"**AI Student's Reasoning:** _{qa['reasoning']}_")
+
+                                st.markdown(f"**Explanation:** {qa.get('explanation', 'N/A')}")
 
             # Button to start new session
             st.markdown("---")

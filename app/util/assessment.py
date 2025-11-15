@@ -1,86 +1,356 @@
-"""Assessment module for generating and evaluating pre/post tests for AI tutee."""
+"""Assessment module for generating and evaluating pre/post tests for AI tutee.
+
+Uses multiple choice questions (MCQ) that can be programmatically graded.
+"""
 
 from typing import Dict, List, Tuple
 import os
+import json
 from openai import OpenAI
 
 
-# Assessment questions for each scenario
-ASSESSMENT_QUESTIONS = {
+# Multiple Choice Assessment Questions for each scenario
+MCQ_ASSESSMENT = {
     "data_types": [
         {
-            "question": "You have a column called 'customer_id' with values 1001, 1002, 1003. Should you use this for quantitative visualization? Why or why not?",
-            "ideal_answer": "No, customer_id is an identifier, not a quantitative value. Even though it's numeric, it represents categories (individual customers) and should not be used for calculations or numeric visualizations.",
-            "key_concepts": ["identifier recognition", "categorical vs numerical"]
+            "question": "A dataset contains a column 'ProductID' with values like 1001, 1002, 1003. What type of data is this?",
+            "options": {
+                "A": "Continuous numerical data",
+                "B": "Discrete numerical data for calculations",
+                "C": "Categorical identifier (nominal)",
+                "D": "Ordinal data"
+            },
+            "correct_answer": "C",
+            "explanation": "ProductID is a categorical identifier (nominal data), not quantitative. Even though it uses numbers, it represents categories and should not be used in calculations."
         },
         {
-            "question": "A survey has responses: 'Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'. What type of data is this, and what's important to remember when visualizing it?",
-            "ideal_answer": "This is ordinal categorical data. It has a natural order but the intervals between values aren't necessarily equal. When visualizing, preserve the order but be careful about treating it as continuous numeric data.",
-            "key_concepts": ["ordinal data", "preserve order"]
+            "question": "Survey responses range from 'Strongly Disagree' (1) to 'Strongly Agree' (5). What is the MOST important consideration when visualizing this data?",
+            "options": {
+                "A": "It's continuous data, so use a line chart",
+                "B": "It's ordinal data with meaningful order but unequal intervals",
+                "C": "It's nominal categorical data with no order",
+                "D": "It's discrete numerical data suitable for any calculation"
+            },
+            "correct_answer": "B",
+            "explanation": "Likert scale data is ordinal - it has a meaningful order, but the intervals between values aren't necessarily equal, so treat it differently than continuous numerical data."
         },
         {
-            "question": "What's the difference between discrete and continuous numerical data? Give an example of each.",
-            "ideal_answer": "Discrete data has distinct, separate values (like number of purchases: 1, 2, 3), while continuous data can take any value within a range (like temperature: 98.6, 98.7, 98.65). Discrete often counts things, continuous measures things.",
-            "key_concepts": ["discrete vs continuous", "measurement types"]
+            "question": "Which of the following is an example of continuous numerical data?",
+            "options": {
+                "A": "Number of employees in a company (e.g., 50, 51, 52)",
+                "B": "Temperature readings (e.g., 72.3°F, 72.5°F, 72.7°F)",
+                "C": "T-shirt sizes (Small, Medium, Large)",
+                "D": "Customer satisfaction rating (1-5 stars)"
+            },
+            "correct_answer": "B",
+            "explanation": "Temperature is continuous because it can take any value within a range. Employee count is discrete (can't have 50.5 employees), and the others are categorical."
+        },
+        {
+            "question": "You have a 'signup_date' column with values like '2024-01-15', '2024-02-20'. What type of data is this?",
+            "options": {
+                "A": "Nominal categorical",
+                "B": "Ordinal categorical",
+                "C": "Temporal (time-based) data",
+                "D": "Continuous numerical"
+            },
+            "correct_answer": "C",
+            "explanation": "Dates are temporal data - they have chronological order and are often used to show trends over time."
+        },
+        {
+            "question": "A dataset has department codes: 101=Sales, 102=Marketing, 103=Engineering. How should you treat these codes?",
+            "options": {
+                "A": "As continuous numbers for mathematical operations",
+                "B": "As nominal categorical labels, not for calculations",
+                "C": "As ordinal data showing department hierarchy",
+                "D": "As discrete numerical data for averaging"
+            },
+            "correct_answer": "B",
+            "explanation": "Department codes are nominal categorical identifiers. The numbers are just labels and shouldn't be used in calculations (averaging departments makes no sense)."
         }
     ],
     "type_to_chart": [
         {
-            "question": "You have sales data with one categorical variable (product type) and one numerical variable (revenue). What chart would you recommend?",
-            "ideal_answer": "A bar chart or column chart would be ideal. Bar charts are perfect for comparing numerical values across categories, making it easy to see which product types generate the most revenue.",
-            "key_concepts": ["categorical to bar", "comparison visualization"]
+            "question": "You need to compare quarterly revenue across 5 product categories. Which chart is MOST appropriate?",
+            "options": {
+                "A": "Line chart",
+                "B": "Scatter plot",
+                "C": "Bar chart or column chart",
+                "D": "Pie chart"
+            },
+            "correct_answer": "C",
+            "explanation": "Bar/column charts are ideal for comparing numerical values across discrete categories. Each category gets its own bar, making comparison easy."
         },
         {
-            "question": "When would you use a line chart instead of a bar chart?",
-            "ideal_answer": "Use a line chart when showing data over time or continuous data where the connection between points is meaningful. Bar charts are better for comparing discrete categories. Line charts show trends and patterns in sequential data.",
-            "key_concepts": ["temporal data", "line vs bar"]
+            "question": "When is a line chart preferred over a bar chart?",
+            "options": {
+                "A": "When comparing discrete categories like product types",
+                "B": "When showing trends over time or continuous data",
+                "C": "When showing composition of a whole",
+                "D": "When displaying the relationship between two numerical variables"
+            },
+            "correct_answer": "B",
+            "explanation": "Line charts are best for temporal data or continuous data where the connection between points is meaningful, showing trends and patterns."
         },
         {
-            "question": "You need to show the relationship between two numerical variables (like height and weight). What chart type would you choose?",
-            "ideal_answer": "A scatter plot would be most appropriate. Scatter plots show the relationship between two numerical variables and can reveal correlations or patterns in the data.",
-            "key_concepts": ["scatter plot", "correlation visualization"]
+            "question": "You have two numerical variables: employee age and salary. Which chart type would best show their relationship?",
+            "options": {
+                "A": "Pie chart",
+                "B": "Bar chart",
+                "C": "Line chart",
+                "D": "Scatter plot"
+            },
+            "correct_answer": "D",
+            "explanation": "Scatter plots are designed to show relationships between two numerical variables and can reveal correlations or patterns."
+        },
+        {
+            "question": "A pie chart is most appropriate when you want to:",
+            "options": {
+                "A": "Show trends over time",
+                "B": "Compare many categories (10+)",
+                "C": "Display parts of a whole (composition)",
+                "D": "Show correlation between variables"
+            },
+            "correct_answer": "C",
+            "explanation": "Pie charts show composition - how parts make up a whole. They work best with few categories (3-7) to show proportions."
+        },
+        {
+            "question": "You have monthly sales data for 12 months. Which chart would be LEAST appropriate?",
+            "options": {
+                "A": "Line chart showing the trend",
+                "B": "Bar chart showing monthly values",
+                "C": "Pie chart with 12 slices for each month",
+                "D": "Area chart showing cumulative sales"
+            },
+            "correct_answer": "C",
+            "explanation": "A pie chart is least appropriate because months don't represent parts of a whole - they're sequential time periods better shown with line or bar charts."
         }
     ],
     "chart_to_task": [
         {
-            "question": "Your task is to show how website traffic has changed over the past year. What chart type matches this analytical goal?",
-            "ideal_answer": "A line chart would be best for showing trends over time. It clearly displays how values change across time periods and makes it easy to spot patterns like seasonal variations or growth trends.",
-            "key_concepts": ["trend analysis", "time series"]
+            "question": "Your analytical task is to 'identify trends in website traffic over the past year'. Which chart type best matches this task?",
+            "options": {
+                "A": "Bar chart",
+                "B": "Pie chart",
+                "C": "Line chart",
+                "D": "Scatter plot"
+            },
+            "correct_answer": "C",
+            "explanation": "Line charts are ideal for trend analysis over time. They clearly show how values change and make patterns like growth or seasonality visible."
         },
         {
-            "question": "You want to compare market share between five competing companies. What chart would you use?",
-            "ideal_answer": "A pie chart or stacked bar chart showing percentages would work well for displaying market share composition. Alternatively, a simple bar chart could compare the absolute values. The choice depends on whether you want to emphasize the parts of a whole or direct comparison.",
-            "key_concepts": ["composition", "comparison"]
+            "question": "You need to 'compare market share among 5 competitors'. Which chart best supports this task?",
+            "options": {
+                "A": "Line chart",
+                "B": "Scatter plot",
+                "C": "Pie chart or stacked bar chart",
+                "D": "Histogram"
+            },
+            "correct_answer": "C",
+            "explanation": "Market share is about composition (parts of a whole). Pie charts or 100% stacked bar charts effectively show how the total market is divided."
         },
         {
-            "question": "What type of chart would you use to show the distribution of test scores in a class?",
-            "ideal_answer": "A histogram would be ideal for showing the distribution of continuous data like test scores. It would show how many students fall into different score ranges and reveal the overall shape of the distribution.",
-            "key_concepts": ["distribution", "histogram"]
+            "question": "The task is to 'understand the distribution of test scores in a class'. Which chart is most appropriate?",
+            "options": {
+                "A": "Pie chart",
+                "B": "Line chart",
+                "C": "Histogram or box plot",
+                "D": "Scatter plot"
+            },
+            "correct_answer": "C",
+            "explanation": "Histograms show distributions of continuous data by grouping values into bins. Box plots also show distribution with quartiles and outliers."
+        },
+        {
+            "question": "Your task is to 'find the correlation between advertising spend and sales revenue'. Best visualization?",
+            "options": {
+                "A": "Two separate pie charts",
+                "B": "Scatter plot with trendline",
+                "C": "Stacked bar chart",
+                "D": "Multiple line charts"
+            },
+            "correct_answer": "B",
+            "explanation": "Scatter plots are designed to show relationships between two numerical variables. A trendline can confirm correlation strength."
+        },
+        {
+            "question": "You need to 'show how budget is allocated across 8 departments'. Which task is this, and which chart fits best?",
+            "options": {
+                "A": "Trend analysis - use line chart",
+                "B": "Comparison - use bar chart",
+                "C": "Correlation - use scatter plot",
+                "D": "Distribution - use histogram"
+            },
+            "correct_answer": "B",
+            "explanation": "Budget allocation across departments is a comparison task. Bar charts excel at comparing values across multiple categories."
         }
     ],
     "data_preparation": [
         {
-            "question": "You notice that a date column has values in multiple formats (MM/DD/YYYY and DD-MM-YYYY). What should you do before visualizing time-based trends?",
-            "ideal_answer": "Standardize all dates to a single format. Inconsistent date formats will cause errors in sorting and plotting. Convert everything to a standard format and ensure the data type is set to datetime.",
-            "key_concepts": ["data standardization", "date formatting"]
+            "question": "Your date column has mixed formats: '01/15/2024', '2024-02-20', '03-MAR-2024'. What should you do FIRST?",
+            "options": {
+                "A": "Delete all rows with inconsistent formats",
+                "B": "Standardize all dates to a single format",
+                "C": "Use them as-is; visualization tools will handle it",
+                "D": "Convert them all to categorical data"
+            },
+            "correct_answer": "B",
+            "explanation": "Standardizing date formats is critical for proper sorting and time-based analysis. Inconsistent formats will cause errors in temporal visualizations."
         },
         {
-            "question": "Your dataset has several rows with missing values in the 'revenue' column. What are your options for handling this?",
-            "ideal_answer": "Options include: 1) Remove rows with missing values if they're few, 2) Impute with mean/median if appropriate, 3) Use a separate category for 'missing' if it's meaningful, or 4) Use visualization techniques that handle missing data. The choice depends on why data is missing and the analysis goal.",
-            "key_concepts": ["missing data", "data cleaning"]
+            "question": "You have a revenue column with 15% missing values. Which approach is LEAST appropriate?",
+            "options": {
+                "A": "Remove rows with missing revenue if the dataset is large enough",
+                "B": "Impute with median revenue if values are missing at random",
+                "C": "Replace all missing values with zero",
+                "D": "Mark missing values as a separate category if missingness is meaningful"
+            },
+            "correct_answer": "C",
+            "explanation": "Replacing missing values with zero is dangerous because it assumes zero revenue, which may not be true. Zero is a meaningful value, not 'missing'."
         },
         {
-            "question": "You want to create a bar chart showing sales by month, but your data has one row per transaction. What data preparation step is needed?",
-            "ideal_answer": "You need to aggregate the data by grouping transactions by month and summing (or averaging) the sales values. This transforms transaction-level data into monthly summaries suitable for visualization.",
-            "key_concepts": ["aggregation", "data transformation"]
+            "question": "Your data has one row per transaction (1000 rows). You want a bar chart of monthly sales. What data preparation is needed?",
+            "options": {
+                "A": "No preparation needed; use raw transaction data",
+                "B": "Aggregate transactions by month and sum sales",
+                "C": "Filter to show only the first transaction per month",
+                "D": "Convert all dates to categorical months"
+            },
+            "correct_answer": "B",
+            "explanation": "You need to aggregate (group) transaction-level data by month and sum the sales to get monthly totals suitable for visualization."
+        },
+        {
+            "question": "You notice extreme outliers in your salary data (e.g., CEO salary is 50x the median). Before visualizing, you should:",
+            "options": {
+                "A": "Always remove all outliers automatically",
+                "B": "Investigate whether outliers are errors or legitimate extreme values",
+                "C": "Change all outliers to the median value",
+                "D": "Ignore them; they won't affect the visualization"
+            },
+            "correct_answer": "B",
+            "explanation": "Outliers could be data errors OR legitimate extreme values (like CEO salary). Investigate first - don't automatically remove or modify without understanding why they exist."
+        },
+        {
+            "question": "Your dataset has a 'price' column stored as text: '$1,234.56'. Before creating a histogram, you need to:",
+            "options": {
+                "A": "Use it as-is; it's already numeric",
+                "B": "Convert to categorical data",
+                "C": "Remove '$' and ',' symbols, then convert to numeric type",
+                "D": "Delete the column and recreate it"
+            },
+            "correct_answer": "C",
+            "explanation": "Text-formatted numbers must be cleaned (remove currency symbols, commas) and type-cast to numeric for mathematical operations and proper visualization."
         }
     ]
 }
 
 
 def get_assessment_questions(scenario_name: str) -> List[Dict]:
-    """Get assessment questions for a specific scenario."""
-    return ASSESSMENT_QUESTIONS.get(scenario_name, [])
+    """Get MCQ assessment questions for a specific scenario."""
+    return MCQ_ASSESSMENT.get(scenario_name, [])
+
+
+def format_mcq_prompt(questions: List[Dict]) -> str:
+    """Format MCQ questions into a prompt for the LLM."""
+    prompt_parts = [
+        "Please answer the following multiple choice questions. ",
+        "Respond ONLY with valid JSON in this exact format:",
+        '{"answers": [{"question_number": 1, "selected_answer": "A", "reasoning": "brief explanation"}, ...]}',
+        "\n\nQuestions:\n"
+    ]
+
+    for i, q in enumerate(questions, 1):
+        prompt_parts.append(f"\n{i}. {q['question']}\n")
+        for option_key, option_text in sorted(q['options'].items()):
+            prompt_parts.append(f"   {option_key}) {option_text}\n")
+
+    prompt_parts.append("\nRemember: Respond with ONLY the JSON object, no additional text.")
+    return "".join(prompt_parts)
+
+
+def parse_llm_response(response_text: str) -> Dict:
+    """Parse LLM response, handling various JSON formats."""
+    # Try to extract JSON from response
+    response_text = response_text.strip()
+
+    # Remove markdown code blocks if present
+    if response_text.startswith("```"):
+        lines = response_text.split("\n")
+        response_text = "\n".join(lines[1:-1]) if len(lines) > 2 else response_text
+        response_text = response_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError as e:
+        # Try to find JSON object in the response
+        start_idx = response_text.find("{")
+        end_idx = response_text.rfind("}") + 1
+        if start_idx != -1 and end_idx > start_idx:
+            try:
+                return json.loads(response_text[start_idx:end_idx])
+            except json.JSONDecodeError:
+                raise ValueError(f"Could not parse LLM response as JSON: {e}")
+        raise ValueError(f"Could not find JSON in LLM response: {e}")
+
+
+def grade_assessment(questions: List[Dict], llm_answers: Dict) -> Tuple[List[Dict], float]:
+    """
+    Grade the assessment programmatically.
+
+    Args:
+        questions: List of question dictionaries with correct answers
+        llm_answers: Parsed JSON response from LLM with selected answers
+
+    Returns:
+        Tuple of (detailed_results, score_percentage)
+    """
+    if "answers" not in llm_answers:
+        raise ValueError("LLM response missing 'answers' key")
+
+    answers_list = llm_answers["answers"]
+    results = []
+    correct_count = 0
+
+    for i, question in enumerate(questions):
+        question_num = i + 1
+
+        # Find the answer for this question
+        llm_answer = next(
+            (a for a in answers_list if a.get("question_number") == question_num),
+            None
+        )
+
+        if llm_answer is None:
+            # Question not answered
+            results.append({
+                "question_number": question_num,
+                "question": question["question"],
+                "correct_answer": question["correct_answer"],
+                "selected_answer": "NOT ANSWERED",
+                "is_correct": False,
+                "explanation": question["explanation"],
+                "reasoning": "No answer provided"
+            })
+            continue
+
+        selected = llm_answer.get("selected_answer", "").upper().strip()
+        correct = question["correct_answer"].upper().strip()
+        is_correct = (selected == correct)
+
+        if is_correct:
+            correct_count += 1
+
+        results.append({
+            "question_number": question_num,
+            "question": question["question"],
+            "options": question["options"],
+            "correct_answer": correct,
+            "selected_answer": selected,
+            "is_correct": is_correct,
+            "explanation": question["explanation"],
+            "reasoning": llm_answer.get("reasoning", "")
+        })
+
+    score_percentage = (correct_count / len(questions) * 100) if questions else 0
+
+    return results, score_percentage
 
 
 def administer_test(
@@ -91,17 +361,17 @@ def administer_test(
     temperature: float = 0.7
 ) -> Tuple[List[Dict], float]:
     """
-    Administer a test to the AI student.
+    Administer an MCQ test to the AI student.
 
     Args:
         scenario_name: Name of the scenario
-        student_messages: Conversation history to provide context
+        student_messages: Conversation history (not used for pre-test, included for consistency)
         system_prompt: The system prompt defining the AI student
         model: OpenAI model to use
         temperature: Sampling temperature
 
     Returns:
-        Tuple of (answers, score) where answers is a list of Q&A dicts and score is 0-100
+        Tuple of (detailed_results, score_percentage)
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -113,46 +383,30 @@ def administer_test(
     if not questions:
         return [], 0.0
 
-    answers = []
-    total_score = 0
+    # Create test prompt
+    mcq_prompt = format_mcq_prompt(questions)
 
-    for q in questions:
-        # Create a test context
-        test_messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Please answer this question concisely, explaining your reasoning:\n\n{q['question']}"}
-        ]
+    test_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": mcq_prompt}
+    ]
 
-        # Get AI student's answer
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                temperature=temperature,
-                messages=test_messages,
-            )
-            answer = response.choices[0].message.content.strip()
-        except Exception as e:
-            answer = f"Error getting response: {e}"
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            messages=test_messages,
+        )
+        response_text = response.choices[0].message.content.strip()
 
-        # Simple scoring: check if key concepts appear in the answer
-        key_concepts = q.get("key_concepts", [])
-        concepts_found = sum(1 for concept in key_concepts if concept.lower() in answer.lower())
-        question_score = (concepts_found / len(key_concepts) * 100) if key_concepts else 50
+        # Parse and grade
+        llm_answers = parse_llm_response(response_text)
+        results, score = grade_assessment(questions, llm_answers)
 
-        total_score += question_score
+        return results, score
 
-        answers.append({
-            "question": q["question"],
-            "answer": answer,
-            "ideal_answer": q["ideal_answer"],
-            "key_concepts": key_concepts,
-            "score": question_score
-        })
-
-    # Average score across all questions
-    average_score = total_score / len(questions) if questions else 0
-
-    return answers, average_score
+    except Exception as e:
+        raise ValueError(f"Error administering test: {e}")
 
 
 def administer_enhanced_test(
@@ -163,17 +417,17 @@ def administer_enhanced_test(
     temperature: float = 0.7
 ) -> Tuple[List[Dict], float]:
     """
-    Administer a test that considers the conversation history for post-test.
+    Administer a post-test that includes recent conversation context.
 
     Args:
         scenario_name: Name of the scenario
-        conversation_history: Full conversation history (for post-test context)
+        conversation_history: Full conversation history for context
         system_prompt: The system prompt defining the AI student
         model: OpenAI model to use
         temperature: Sampling temperature
 
     Returns:
-        Tuple of (answers, score) where answers is a list of Q&A dicts and score is 0-100
+        Tuple of (detailed_results, score_percentage)
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -185,73 +439,48 @@ def administer_enhanced_test(
     if not questions:
         return [], 0.0
 
-    answers = []
-    total_score = 0
+    # Create test prompt with context
+    mcq_prompt = format_mcq_prompt(questions)
+    context_intro = (
+        "Based on what we've discussed in our teaching session, "
+        "please answer the following assessment questions.\n\n"
+    )
+    full_prompt = context_intro + mcq_prompt
 
-    # For post-test, include recent conversation for context
+    # Include recent conversation for context (last 6 messages)
     context_messages = [{"role": "system", "content": system_prompt}]
-
-    # Add the last few exchanges for context (avoid token limits)
     recent_history = [msg for msg in conversation_history if msg["role"] != "system"][-6:]
     context_messages.extend(recent_history)
+    context_messages.append({"role": "user", "content": full_prompt})
 
-    for q in questions:
-        # Add test question
-        test_messages = context_messages + [
-            {"role": "user", "content": f"Now, please answer this assessment question, applying what we've discussed:\n\n{q['question']}"}
-        ]
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            messages=context_messages,
+            max_tokens=1000
+        )
+        response_text = response.choices[0].message.content.strip()
 
-        # Get AI student's answer
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                temperature=temperature,
-                messages=test_messages,
-                max_tokens=300
-            )
-            answer = response.choices[0].message.content.strip()
-        except Exception as e:
-            answer = f"Error getting response: {e}"
+        # Parse and grade
+        llm_answers = parse_llm_response(response_text)
+        results, score = grade_assessment(questions, llm_answers)
 
-        # Enhanced scoring: check key concepts and compare to ideal answer
-        key_concepts = q.get("key_concepts", [])
-        concepts_found = sum(1 for concept in key_concepts if concept.lower() in answer.lower())
+        return results, score
 
-        # Additional points for mentioning terms from ideal answer
-        ideal_terms = [term.lower() for term in q["ideal_answer"].split() if len(term) > 4]
-        ideal_matches = sum(1 for term in ideal_terms if term in answer.lower())
-
-        # Weighted scoring
-        concept_score = (concepts_found / len(key_concepts) * 60) if key_concepts else 30
-        ideal_score = min(ideal_matches * 5, 40)  # Up to 40 points for matching ideal answer terms
-        question_score = min(concept_score + ideal_score, 100)
-
-        total_score += question_score
-
-        answers.append({
-            "question": q["question"],
-            "answer": answer,
-            "ideal_answer": q["ideal_answer"],
-            "key_concepts": key_concepts,
-            "concepts_found": concepts_found,
-            "score": question_score
-        })
-
-    # Average score across all questions
-    average_score = total_score / len(questions) if questions else 0
-
-    return answers, average_score
+    except Exception as e:
+        raise ValueError(f"Error administering post-test: {e}")
 
 
 def calculate_improvement(pre_test_score: float, post_test_score: float) -> Dict[str, any]:
     """Calculate improvement metrics between pre and post test."""
     improvement = post_test_score - pre_test_score
-    improvement_percent = (improvement / 100) * 100 if pre_test_score > 0 else 0
+    improvement_percent = improvement  # Already in percentage points
 
     return {
         "pre_test_score": round(pre_test_score, 1),
         "post_test_score": round(post_test_score, 1),
         "improvement": round(improvement, 1),
         "improvement_percent": round(improvement_percent, 1),
-        "learned": improvement > 5,  # Consider significant if improved more than 5 points
+        "learned": improvement > 10,  # Consider significant if improved more than 10 percentage points
     }
