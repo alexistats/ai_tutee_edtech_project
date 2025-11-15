@@ -41,6 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--level", type=str, choices=["beginner", "intermediate"], help="Override student knowledge level")
     parser.add_argument("--dry-run", action="store_true", help="Skip API calls and return stubbed assistant messages")
     parser.add_argument("--auto-teacher", action="store_true", help="Use scenario task prompts automatically instead of interactive input")
+    parser.add_argument("--with-tests", action="store_true", help="Include pre-test and post-test MCQ assessments")
+    parser.add_argument("--test-results-dir", type=str, default="logs/test_results", help="Directory to write test results")
     return parser.parse_args()
 
 
@@ -313,10 +315,144 @@ def run_session(args: argparse.Namespace) -> Path:
     return transcript_path
 
 
+def run_mcq_test(
+    scenario: str,
+    test_type: str,
+    model: str,
+    temperature: float,
+    test_results_dir: str,
+    dry_run: bool = False
+) -> Optional[Dict]:
+    """
+    Run a single MCQ test (pre or post).
+
+    Args:
+        scenario: The scenario name
+        test_type: Either 'pre_test' or 'post_test'
+        model: Model name to use
+        temperature: Sampling temperature
+        test_results_dir: Directory to save results
+        dry_run: If True, skip the test
+
+    Returns:
+        Dictionary with test results or None if dry_run
+    """
+    if dry_run:
+        print(f"\n[DRY RUN] Skipping {test_type} for {scenario}")
+        return None
+
+    from app.mcq_test_admin import MCQTestAdministrator
+    from app.util.io import ensure_logdir
+
+    # Ensure test results directory exists
+    ensure_logdir(Path(test_results_dir))
+
+    # Create test administrator
+    admin = MCQTestAdministrator(model=model, temperature=temperature)
+
+    # Run the test with grading
+    result_data = admin.run_test_with_grading(
+        scenario=scenario,
+        test_type=test_type,
+        verbose=True,
+        save_results=True,
+        output_dir=test_results_dir
+    )
+
+    return result_data
+
+
+def run_session_with_tests(args: argparse.Namespace) -> Dict:
+    """
+    Run a complete session with pre-test, tutoring, and post-test.
+
+    Args:
+        args: Command-line arguments
+
+    Returns:
+        Dictionary with all results including test scores and transcript path
+    """
+    scenario_name = resolve_scenario_choice(args.scenario)
+    args.scenario = scenario_name
+
+    model = args.model or os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+
+    print(f"\n{'='*60}")
+    print(f"Running full session with tests for: {scenario_name}")
+    print(f"{'='*60}\n")
+
+    # Run pre-test
+    print("\n" + "="*60)
+    print("PHASE 1: PRE-TEST")
+    print("="*60)
+    pre_test_result = run_mcq_test(
+        scenario=scenario_name,
+        test_type="pre_test",
+        model=model,
+        temperature=args.temperature,
+        test_results_dir=args.test_results_dir,
+        dry_run=args.dry_run
+    )
+
+    # Run the tutoring session
+    print("\n" + "="*60)
+    print("PHASE 2: TUTORING SESSION")
+    print("="*60)
+    transcript_path = run_session(args)
+
+    # Run post-test
+    print("\n" + "="*60)
+    print("PHASE 3: POST-TEST")
+    print("="*60)
+    post_test_result = run_mcq_test(
+        scenario=scenario_name,
+        test_type="post_test",
+        model=model,
+        temperature=args.temperature,
+        test_results_dir=args.test_results_dir,
+        dry_run=args.dry_run
+    )
+
+    # Display improvement summary
+    if not args.dry_run and pre_test_result and post_test_result:
+        print("\n" + "="*60)
+        print("LEARNING IMPROVEMENT SUMMARY")
+        print("="*60)
+
+        pre_result = pre_test_result['test_result']
+        post_result = post_test_result['test_result']
+
+        improvement = post_result.score_percentage - pre_result.score_percentage
+
+        print(f"\nScenario: {scenario_name.replace('_', ' ').title()}")
+        print(f"Pre-test score:  {pre_result.correct_answers}/{pre_result.total_questions} ({pre_result.score_percentage:.1f}%)")
+        print(f"Post-test score: {post_result.correct_answers}/{post_result.total_questions} ({post_result.score_percentage:.1f}%)")
+        print(f"Improvement:     {improvement:+.1f} percentage points")
+
+        if improvement > 0:
+            print("\n✓ The AI tutee showed improvement after the tutoring session!")
+        elif improvement == 0:
+            print("\n→ The AI tutee maintained the same performance level.")
+        else:
+            print("\n✗ The AI tutee's performance decreased. Consider reviewing the tutoring approach.")
+
+        print("="*60 + "\n")
+
+    return {
+        'scenario': scenario_name,
+        'transcript_path': transcript_path,
+        'pre_test_result': pre_test_result,
+        'post_test_result': post_test_result
+    }
+
+
 def main() -> int:
     args = parse_args()
     try:
-        run_session(args)
+        if args.with_tests:
+            run_session_with_tests(args)
+        else:
+            run_session(args)
     except RunnerError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
