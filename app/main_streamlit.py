@@ -384,28 +384,10 @@ def send_teacher_message(teacher_input: str):
     log_message("user", teacher_message, st.session_state.turn_counter, scenario_name,
                 model, prompt_config["policy"], prompt_config["knowledge"])
 
-    # Mark current question as addressed if we're in question-by-question mode
-    if st.session_state.current_question_focus is not None:
-        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+    # Don't automatically mark as addressed - let the conversation flow naturally
+    # The teacher will manually mark questions as addressed when ready
 
-    # Check if we should move to the next question
-    next_question = get_next_unaddressed_question()
-    if next_question and st.session_state.pre_test_completed:
-        # Guide the AI to the next question
-        guidance_context = build_question_focused_context(next_question)
-        st.session_state.current_question_focus = next_question.get('question_number')
-        st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
-    elif st.session_state.pre_test_completed and not next_question and not st.session_state.ready_for_post_test:
-        # All questions addressed - guide AI to prompt for post-test
-        st.session_state.ready_for_post_test = True
-        post_test_prompt_guidance = (
-            "(Internal guidance: You have worked through all the pre-test questions with your teacher. "
-            "Thank your teacher for the tutoring session and tell them you're ready to take the test again with your new knowledge. "
-            "Express that you'd like to see how much you've improved.)"
-        )
-        st.session_state.messages.append({"role": "user", "content": post_test_prompt_guidance})
-
-    # Get AI student response
+    # Get AI student response (with natural conversation flow)
     assistant_reply = call_model(st.session_state.messages, model=model)
     st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
     log_message("assistant", assistant_reply, st.session_state.turn_counter, scenario_name,
