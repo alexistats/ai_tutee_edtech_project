@@ -155,6 +155,11 @@ def call_model(messages: List[Dict[str, str]], model: str, temperature: float) -
     try:
         from openai import OpenAI  # type: ignore
 
+        # GPT-5-mini only supports temperature=1 (default)
+        # Adjust temperature for models that don't support custom values
+        if "gpt-5" in model.lower():
+            temperature = 1.0
+
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
             model=model,

@@ -869,6 +869,11 @@ def administer_test(
         {"role": "user", "content": mcq_prompt}
     ]
 
+    # GPT-5-mini only supports temperature=1 (default)
+    # Adjust temperature for models that don't support custom values
+    if "gpt-5" in model.lower():
+        temperature = 1.0
+
     try:
         response = client.chat.completions.create(
             model=model,
@@ -933,10 +938,16 @@ Generate the learning summary now:"""
     summary_messages.extend(conversation)
     summary_messages.append({"role": "user", "content": condense_prompt})
 
+    # GPT-5-mini only supports temperature=1 (default)
+    # Adjust temperature for models that don't support custom values
+    summary_temperature = 0.3  # Lower temperature for more focused summary
+    if "gpt-5" in model.lower():
+        summary_temperature = 1.0
+
     try:
         response = client.chat.completions.create(
             model=model,
-            temperature=0.3,  # Lower temperature for more focused summary
+            temperature=summary_temperature,
             messages=summary_messages,
             max_tokens=800
         )
@@ -1039,6 +1050,11 @@ def administer_enhanced_test(
         {"role": "system", "content": post_test_system_prompt},
         {"role": "user", "content": full_prompt}
     ]
+
+    # GPT-5-mini only supports temperature=1 (default)
+    # Adjust temperature for models that don't support custom values
+    if "gpt-5" in model.lower():
+        temperature = 1.0
 
     try:
         response = client.chat.completions.create(
