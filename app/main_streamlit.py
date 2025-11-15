@@ -74,6 +74,12 @@ def initialize_session_state():
         st.session_state.prompt_config = None
     if "system_prompt" not in st.session_state:
         st.session_state.system_prompt = None
+    if "questions_addressed" not in st.session_state:
+        st.session_state.questions_addressed = set()
+    if "current_question_focus" not in st.session_state:
+        st.session_state.current_question_focus = None
+    if "ready_for_post_test" not in st.session_state:
+        st.session_state.ready_for_post_test = False
 
 
 def available_scenarios() -> List[str]:
@@ -136,8 +142,78 @@ def build_prompt_config(scenario: Dict, knowledge_level: str, policy: str) -> Di
     }
 
 
+def get_next_unaddressed_question():
+    """Get the next pre-test question that hasn't been addressed yet."""
+    if not st.session_state.pre_test_answers:
+        return None
+
+    for qa in st.session_state.pre_test_answers:
+        q_num = qa.get('question_number', 0)
+        if q_num not in st.session_state.questions_addressed:
+            return qa
+    return None
+
+
+def check_if_all_questions_addressed():
+    """Check if all pre-test questions have been addressed."""
+    if not st.session_state.pre_test_answers:
+        return False
+
+    total_questions = len(st.session_state.pre_test_answers)
+    addressed_questions = len(st.session_state.questions_addressed)
+
+    return addressed_questions >= total_questions
+
+
+def build_question_focused_context(question: Dict) -> str:
+    """Build context for AI student to focus on a specific pre-test question."""
+    q_num = question.get('question_number', 0)
+    q_text = question.get('question', '')
+    selected = question.get('selected_answer', '')
+    is_correct = question.get('is_correct', False)
+    reasoning = question.get('reasoning', '')
+
+    if is_correct:
+        lines = [
+            f"You are working through the pre-test results with your teacher.",
+            f"You got question {q_num} CORRECT in the pre-test.",
+            f"The question was: '{q_text}'",
+            f"You selected {selected}, which was correct.",
+            f"However, your teacher wants to make sure you truly understand this topic.",
+            f"Ask ONE specific question about this topic to deepen your understanding or confirm your reasoning."
+        ]
+    else:
+        lines = [
+            f"You are working through the pre-test results with your teacher.",
+            f"You got question {q_num} WRONG in the pre-test.",
+            f"The question was: '{q_text}'",
+            f"You selected {selected}, which was incorrect.",
+            f"Your reasoning was: {reasoning}",
+            f"Ask your teacher ONE specific question to understand where you went wrong and learn the correct approach."
+        ]
+
+    return " ".join(lines)
+
+
 def build_student_intro_context(scenario: Dict, prompt_meta: Dict[str, object]) -> str:
     """Build the context for the AI student's introduction."""
+    # If pre-test is complete, guide the student to work through questions
+    if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+        next_question = get_next_unaddressed_question()
+        if next_question:
+            st.session_state.current_question_focus = next_question.get('question_number')
+            return build_question_focused_context(next_question)
+        else:
+            # All questions addressed - prompt for post-test
+            st.session_state.ready_for_post_test = True
+            return (
+                "You have worked through all the pre-test questions with your teacher. "
+                "You feel much more confident now. "
+                "Thank your teacher for the tutoring session and tell them you're ready to take the test again with your new knowledge. "
+                "Express that you'd like to see how much you've improved."
+            )
+
+    # Original intro for sessions without pre-test
     description = scenario.get("description", "")
     tasks = scenario.get("tasks", [])
     target_subskills = [s.replace("_", " ") for s in prompt_meta.get("target_subskills", [])]
@@ -291,6 +367,27 @@ def send_teacher_message(teacher_input: str):
     st.session_state.messages.append({"role": "user", "content": teacher_message})
     log_message("user", teacher_message, st.session_state.turn_counter, scenario_name,
                 model, prompt_config["policy"], prompt_config["knowledge"])
+
+    # Mark current question as addressed if we're in question-by-question mode
+    if st.session_state.current_question_focus is not None:
+        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+
+    # Check if we should move to the next question
+    next_question = get_next_unaddressed_question()
+    if next_question and st.session_state.pre_test_completed:
+        # Guide the AI to the next question
+        guidance_context = build_question_focused_context(next_question)
+        st.session_state.current_question_focus = next_question.get('question_number')
+        st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
+    elif st.session_state.pre_test_completed and not next_question and not st.session_state.ready_for_post_test:
+        # All questions addressed - guide AI to prompt for post-test
+        st.session_state.ready_for_post_test = True
+        post_test_prompt_guidance = (
+            "(Internal guidance: You have worked through all the pre-test questions with your teacher. "
+            "Thank your teacher for the tutoring session and tell them you're ready to take the test again with your new knowledge. "
+            "Express that you'd like to see how much you've improved.)"
+        )
+        st.session_state.messages.append({"role": "user", "content": post_test_prompt_guidance})
 
     # Get AI student response
     assistant_reply = call_model(st.session_state.messages, model=model)
@@ -635,12 +732,50 @@ def main():
 
                 st.markdown("---")
 
+            # Display question-by-question progress
+            if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+                total_questions = len(st.session_state.pre_test_answers)
+                addressed = len(st.session_state.questions_addressed)
+
+                # Progress bar
+                progress = addressed / total_questions if total_questions > 0 else 0
+                st.markdown(f"### 📝 Teaching Progress: {addressed}/{total_questions} Questions Covered")
+                st.progress(progress)
+
+                # Show current focus
+                if st.session_state.current_question_focus:
+                    current_q = next((qa for qa in st.session_state.pre_test_answers
+                                     if qa.get('question_number') == st.session_state.current_question_focus), None)
+                    if current_q:
+                        st.info(f"**Currently Discussing:** Question {st.session_state.current_question_focus} - {current_q['question'][:80]}...")
+                elif st.session_state.ready_for_post_test:
+                    st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
+
+                # Quick reference of question status
+                with st.expander("📋 Question Status", expanded=False):
+                    for qa in st.session_state.pre_test_answers:
+                        q_num = qa.get('question_number', 0)
+                        is_addressed = q_num in st.session_state.questions_addressed
+                        is_correct = qa.get('is_correct', False)
+
+                        if is_addressed:
+                            status = "✅ Addressed"
+                        elif q_num == st.session_state.current_question_focus:
+                            status = "🔵 Current Focus"
+                        else:
+                            status = "⏳ Pending"
+
+                        result_icon = "✓" if is_correct else "✗"
+                        st.markdown(f"**Q{q_num}** [{result_icon}]: {status} - {qa['question'][:60]}...")
+
+                st.markdown("---")
+
             # Display chat messages
             st.markdown("### 💬 Conversation")
             chat_container = st.container()
 
             with chat_container:
-                # Display all messages except system prompt
+                # Display all messages except system prompt and internal guidance
                 for message in st.session_state.messages:
                     if message["role"] == "system":
                         continue
@@ -648,10 +783,16 @@ def main():
                         with st.chat_message("assistant", avatar="🤖"):
                             st.markdown(message["content"])
                     elif message["role"] == "user":
-                        # Extract actual teacher input (remove policy hint)
                         content = message["content"]
+
+                        # Skip internal guidance messages
+                        if content.startswith("(Internal guidance:"):
+                            continue
+
+                        # Extract actual teacher input (remove policy hint)
                         if content.startswith("(Policy reminder:"):
                             content = content.split(")", 1)[1].strip() if ")" in content else content
+
                         with st.chat_message("user", avatar="👨‍🏫"):
                             st.markdown(content)
 
@@ -661,6 +802,21 @@ def main():
                 send_teacher_message(teacher_input)
                 st.rerun()
 
+            # Question navigation controls
+            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                st.markdown("---")
+                col_nav1, col_nav2 = st.columns([1, 1])
+                with col_nav1:
+                    if st.button("✅ Mark Current Question as Addressed", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        st.session_state.current_question_focus = None
+                        st.rerun()
+                with col_nav2:
+                    if st.button("⏭️ Skip to Next Question", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        st.session_state.current_question_focus = None
+                        st.rerun()
+
             # End session controls
             st.markdown("---")
             st.markdown("### Session Controls")
@@ -668,7 +824,11 @@ def main():
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                if st.button("🏁 End Session & Run Post-Test", type="primary", use_container_width=True):
+                # Highlight the post-test button if AI is ready
+                button_type = "primary" if st.session_state.ready_for_post_test else "primary"
+                button_text = "🎯 Run Post-Test (AI is Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
+
+                if st.button(button_text, type=button_type, use_container_width=True):
                     with st.spinner("Running post-test and calculating results..."):
                         # Run post-test
                         if run_post_test():
