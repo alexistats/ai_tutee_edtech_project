@@ -18,14 +18,46 @@ criteria:
   - Student links chart choices to the expressed task and flags mismatches.
   - Student requests missing context needed to judge whether the chart will answer the question.
 student_config:
-  knowledge_level: beginner
-  target_subskills:
-    - identify_task_intent
-    - match_comparison_tasks_to_bars_or_columns
-    - select_distribution_views_for_spread
-  misconceptions:
-    - confuse_rank_with_trend
-    - assume_one_chart_fits_all_tasks
-  release_answers_policy: withhold_solution
-  tone: encouraging, concise, concrete
-  turn_budget: 7
+  beginner:
+    knowledge_level: beginner
+    target_subskills:
+      - identify_task_intent
+      - match_comparison_tasks_to_bars_or_columns
+      - select_distribution_views_for_spread
+    misconceptions:
+      - confuse_rank_with_trend
+      - assume_one_chart_fits_all_tasks
+    release_answers_policy: withhold_solution
+    tone: encouraging, concise, concrete
+    turn_budget: 7
+  intermediate:
+    knowledge_level: intermediate
+    target_subskills:
+      - identify_task_intent
+      - match_comparison_tasks_to_bars_or_columns
+      - match_trend_tasks_to_lines_or_areas
+      - select_distribution_views_for_spread
+      - choose_charts_for_exploratory_analysis
+    misconceptions:
+      - overlook_outlier_identification_needs
+      - fail_to_plan_for_drill_down_requirements
+      - ignore_sequential_flow_visualizations
+    release_answers_policy: guided_steps
+    tone: encouraging, concise, concrete
+    turn_budget: 9
+  advanced:
+    knowledge_level: advanced
+    target_subskills:
+      - identify_task_intent
+      - match_comparison_tasks_to_bars_or_columns
+      - match_trend_tasks_to_lines_or_areas
+      - select_distribution_views_for_spread
+      - design_diagnostic_analysis_workflows
+      - create_audience_specific_deliverables
+    misconceptions:
+      - provide_insufficient_statistical_context
+      - fail_to_enable_self_service_exploration
+      - ignore_multi_audience_requirements
+    release_answers_policy: full_solution_ok
+    tone: encouraging, analytical, nuanced
+    turn_budget: 12

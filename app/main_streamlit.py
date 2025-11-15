@@ -60,6 +60,8 @@ def initialize_session_state():
         st.session_state.post_test_score = None
     if "post_test_answers" not in st.session_state:
         st.session_state.post_test_answers = None
+    if "learning_summary" not in st.session_state:
+        st.session_state.learning_summary = None
     if "show_results" not in st.session_state:
         st.session_state.show_results = False
     if "session_id" not in st.session_state:
@@ -96,12 +98,24 @@ def get_scenario_display_name(scenario_key: str) -> str:
 def build_prompt_config(scenario: Dict, knowledge_level: str, policy: str) -> Dict[str, object]:
     """Build configuration for the AI student prompt."""
     student_config = scenario.get("student_config", {})
-    knowledge = knowledge_level or student_config.get("knowledge_level", "beginner")
-    policy = policy or student_config.get("release_answers_policy", "withhold_solution")
-    target_subskills = student_config.get("target_subskills") or scenario.get("subskills", [])
-    misconceptions = student_config.get("misconceptions") or scenario.get("misconceptions", [])
-    tone = student_config.get("tone", DEFAULT_TONE)
-    turn_budget = student_config.get("turn_budget", DEFAULT_TURN_BUDGET)
+
+    # Handle both old (flat) and new (nested by level) student_config structures
+    if knowledge_level and knowledge_level in student_config:
+        # New nested structure: student_config[level]
+        level_config = student_config[knowledge_level]
+    elif "knowledge_level" in student_config:
+        # Old flat structure
+        level_config = student_config
+    else:
+        # Fallback to beginner if available
+        level_config = student_config.get("beginner", student_config)
+
+    knowledge = knowledge_level or level_config.get("knowledge_level", "beginner")
+    policy = policy or level_config.get("release_answers_policy", "withhold_solution")
+    target_subskills = level_config.get("target_subskills") or scenario.get("subskills", [])
+    misconceptions = level_config.get("misconceptions") or scenario.get("misconceptions", [])
+    tone = level_config.get("tone", DEFAULT_TONE)
+    turn_budget = level_config.get("turn_budget", DEFAULT_TURN_BUDGET)
 
     replacements = {
         "KNOWLEDGE_LEVEL": knowledge,
@@ -246,6 +260,22 @@ def start_session(scenario_name: str, knowledge_level: str, policy: str):
     st.session_state.turn_counter += 1
     st.session_state.session_started = True
 
+    # Auto-run pre-test
+    try:
+        answers, score = administer_test(
+            scenario_name,
+            st.session_state.messages,
+            system_prompt,
+            knowledge_level=prompt_config["knowledge"],
+            model=model
+        )
+        st.session_state.pre_test_score = score
+        st.session_state.pre_test_answers = answers
+        st.session_state.pre_test_completed = True
+    except Exception as e:
+        st.warning(f"Could not run pre-test automatically: {e}")
+        st.session_state.pre_test_completed = False
+
 
 def send_teacher_message(teacher_input: str):
     """Process teacher input and get AI student response."""
@@ -305,10 +335,12 @@ def run_pre_test():
     """Administer pre-test to the AI student."""
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+        knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
         answers, score = administer_test(
             st.session_state.scenario_name,
             st.session_state.messages,
             st.session_state.system_prompt,
+            knowledge_level=knowledge_level,
             model=model
         )
         st.session_state.pre_test_score = score
@@ -324,14 +356,17 @@ def run_post_test():
     """Administer post-test to the AI student with conversation context."""
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
-        answers, score = administer_enhanced_test(
+        knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
+        answers, score, learning_summary = administer_enhanced_test(
             st.session_state.scenario_name,
             st.session_state.messages,
             st.session_state.system_prompt,
+            knowledge_level=knowledge_level,
             model=model
         )
         st.session_state.post_test_score = score
         st.session_state.post_test_answers = answers
+        st.session_state.learning_summary = learning_summary
         return True
     except Exception as e:
         st.error(f"Error running post-test: {e}")
@@ -465,7 +500,15 @@ def main():
                     Consider reviewing the concepts or trying a different teaching approach.
                     """)
 
+                # Display learning summary
+                if st.session_state.learning_summary:
+                    st.markdown("---")
+                    with st.expander("📚 AI Student's Learning Summary", expanded=True):
+                        st.markdown("**What the AI student learned from you:**")
+                        st.markdown(st.session_state.learning_summary)
+
                 # Display detailed results in tabs
+                st.markdown("---")
                 tab1, tab2 = st.tabs(["📋 Pre-Test Results", "📋 Post-Test Results"])
 
                 with tab1:
@@ -559,26 +602,36 @@ def main():
                 if description:
                     st.info(f"**Learning Goal**: {description}")
 
-            # Pre-test prompt if not completed
-            if not st.session_state.pre_test_completed:
-                st.warning("""
-                ### 📝 Pre-Test Recommended
+            # Display pre-test results toggle
+            if st.session_state.pre_test_completed and st.session_state.pre_test_score is not None:
+                st.markdown("---")
+                with st.expander(f"📊 Pre-Test Results (Score: {st.session_state.pre_test_score:.1f}%)", expanded=False):
+                    st.markdown("**AI Student's Initial Assessment**")
+                    st.markdown("Use these results to guide your teaching. Focus on questions the student got wrong.")
 
-                Before you begin teaching, you can optionally run a pre-test to assess your AI student's
-                initial knowledge. This will help measure learning progress at the end of the session.
-                """)
+                    if st.session_state.pre_test_answers:
+                        for qa in st.session_state.pre_test_answers:
+                            q_num = qa.get('question_number', 0)
+                            is_correct = qa.get('is_correct', False)
+                            status_icon = "✅" if is_correct else "❌"
 
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    if st.button("📝 Run Pre-Test", type="primary", use_container_width=True):
-                        with st.spinner("Administering pre-test..."):
-                            if run_pre_test():
-                                st.success(f"Pre-test complete! Initial score: {st.session_state.pre_test_score:.1f}%")
-                                st.rerun()
-                with col2:
-                    if st.button("Skip Pre-Test", type="secondary", use_container_width=True):
-                        st.session_state.pre_test_completed = True
-                        st.rerun()
+                            st.markdown(f"**{status_icon} Question {q_num}:** {qa['question']}")
+
+                            # Show selected answer
+                            selected = qa.get('selected_answer', 'N/A')
+                            correct = qa.get('correct_answer', 'N/A')
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"*AI Student Selected:* **{selected}**")
+                            with col2:
+                                st.markdown(f"*Correct Answer:* **{correct}**")
+
+                            # Show AI student's initial reasoning (but NOT the correct explanation)
+                            if qa.get('reasoning'):
+                                st.markdown(f"*AI Student's Reasoning:* {qa['reasoning']}")
+
+                            st.markdown("---")
 
                 st.markdown("---")
 
@@ -602,34 +655,33 @@ def main():
                         with st.chat_message("user", avatar="👨‍🏫"):
                             st.markdown(content)
 
-            # Teacher input (only show if pre-test is handled)
-            if st.session_state.pre_test_completed:
-                teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
-                if teacher_input:
-                    send_teacher_message(teacher_input)
-                    st.rerun()
+            # Teacher input
+            teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
+            if teacher_input:
+                send_teacher_message(teacher_input)
+                st.rerun()
 
-                # End session controls
-                st.markdown("---")
-                st.markdown("### Session Controls")
+            # End session controls
+            st.markdown("---")
+            st.markdown("### Session Controls")
 
-                col1, col2 = st.columns([1, 1])
+            col1, col2 = st.columns([1, 1])
 
-                with col1:
-                    if st.button("🏁 End Session & Run Post-Test", type="primary", use_container_width=True):
-                        with st.spinner("Running post-test and calculating results..."):
-                            # Run post-test
-                            if run_post_test():
-                                # Save logs
-                                log_path = save_session_logs()
-                                st.session_state.show_results = True
-                                st.rerun()
+            with col1:
+                if st.button("🏁 End Session & Run Post-Test", type="primary", use_container_width=True):
+                    with st.spinner("Running post-test and calculating results..."):
+                        # Run post-test
+                        if run_post_test():
+                            # Save logs
+                            log_path = save_session_logs()
+                            st.session_state.show_results = True
+                            st.rerun()
 
-                with col2:
-                    if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
-                        log_path = save_session_logs()
-                        st.success(f"Session saved! Logs: {log_path}")
-                        st.balloons()
+            with col2:
+                if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
+                    log_path = save_session_logs()
+                    st.success(f"Session saved! Logs: {log_path}")
+                    st.balloons()
 
 
 if __name__ == "__main__":

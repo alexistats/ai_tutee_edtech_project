@@ -18,14 +18,46 @@ criteria:
   - Student flags identifiers or codes that should not drive quantitative encodings.
   - Student requests clarification whenever a column's data type is ambiguous.
 student_config:
-  knowledge_level: beginner
-  target_subskills:
-    - distinguish_categorical_vs_numerical
-    - differentiate_ordinal_vs_nominal
-    - flag_identifier_fields
-  misconceptions:
-    - treat_ids_as_numeric_values
-    - assume_ordinal_behaves_like_continuous
-  release_answers_policy: withhold_solution
-  tone: encouraging, concise, concrete
-  turn_budget: 7
+  beginner:
+    knowledge_level: beginner
+    target_subskills:
+      - distinguish_categorical_vs_numerical
+      - differentiate_ordinal_vs_nominal
+      - flag_identifier_fields
+    misconceptions:
+      - treat_ids_as_numeric_values
+      - assume_ordinal_behaves_like_continuous
+    release_answers_policy: withhold_solution
+    tone: encouraging, concise, concrete
+    turn_budget: 7
+  intermediate:
+    knowledge_level: intermediate
+    target_subskills:
+      - distinguish_categorical_vs_numerical
+      - differentiate_ordinal_vs_nominal
+      - flag_identifier_fields
+      - separate_discrete_vs_continuous
+      - recognize_data_type_casting_issues
+    misconceptions:
+      - confuse_zip_codes_as_numerical
+      - treat_rating_scales_inconsistently
+      - mishandle_mixed_unit_data
+    release_answers_policy: guided_steps
+    tone: encouraging, concise, concrete
+    turn_budget: 9
+  advanced:
+    knowledge_level: advanced
+    target_subskills:
+      - distinguish_categorical_vs_numerical
+      - differentiate_ordinal_vs_nominal
+      - flag_identifier_fields
+      - separate_discrete_vs_continuous
+      - understand_data_distribution_effects
+      - make_strategic_binning_decisions
+    misconceptions:
+      - overlook_distribution_impact_on_type_choice
+      - ignore_context_in_continuous_to_categorical_conversion
+      - miss_ratio_vs_interval_scale_distinctions
+    release_answers_policy: full_solution_ok
+    tone: encouraging, analytical, nuanced
+    turn_budget: 12

@@ -18,14 +18,46 @@ criteria:
   - Student considers composition limits and warns about overloaded categories.
   - Student challenges mismatched chart requests with clarifying questions.
 student_config:
-  knowledge_level: beginner
-  target_subskills:
-    - map_categorical_to_bar_or_column
-    - map_temporal_to_line_or_area
-    - account_for_composition_constraints
-  misconceptions:
-    - use_line_for_categories
-    - default_to_pie_with_many_categories
-  release_answers_policy: withhold_solution
-  tone: encouraging, concise, concrete
-  turn_budget: 7
+  beginner:
+    knowledge_level: beginner
+    target_subskills:
+      - map_categorical_to_bar_or_column
+      - map_temporal_to_line_or_area
+      - account_for_composition_constraints
+    misconceptions:
+      - use_line_for_categories
+      - default_to_pie_with_many_categories
+    release_answers_policy: withhold_solution
+    tone: encouraging, concise, concrete
+    turn_budget: 7
+  intermediate:
+    knowledge_level: intermediate
+    target_subskills:
+      - map_categorical_to_bar_or_column
+      - map_temporal_to_line_or_area
+      - choose_distribution_charts_for_numeric
+      - account_for_composition_constraints
+      - select_charts_for_multiple_dimensions
+    misconceptions:
+      - fail_to_consider_category_count
+      - overlook_dual_dimension_chart_options
+      - ignore_data_granularity_effects
+    release_answers_policy: guided_steps
+    tone: encouraging, concise, concrete
+    turn_budget: 9
+  advanced:
+    knowledge_level: advanced
+    target_subskills:
+      - map_categorical_to_bar_or_column
+      - map_temporal_to_line_or_area
+      - choose_distribution_charts_for_numeric
+      - account_for_composition_constraints
+      - handle_high_dimensional_data
+      - choose_specialized_chart_types
+    misconceptions:
+      - create_overly_complex_single_charts
+      - underuse_coordinated_views
+      - ignore_streaming_data_constraints
+    release_answers_policy: full_solution_ok
+    tone: encouraging, analytical, nuanced
+    turn_budget: 12
