@@ -318,25 +318,7 @@ def start_session(scenario_name: str, knowledge_level: str, policy: str):
     log_message("system", system_prompt, 0, scenario_name, model,
                 prompt_config["policy"], prompt_config["knowledge"])
 
-    # Build intro context and get AI student's initial greeting
-    intro_context = format_teacher_turn(
-        build_student_intro_context(scenario, prompt_config),
-        prompt_config["policy"]
-    )
-    st.session_state.messages.append({"role": "user", "content": intro_context})
-    log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
-                model, prompt_config["policy"], prompt_config["knowledge"])
-
-    # Get AI student's initial response
-    intro_reply = call_model(st.session_state.messages, model=model)
-    st.session_state.messages.append({"role": "assistant", "content": intro_reply})
-    log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
-                model, prompt_config["policy"], prompt_config["knowledge"])
-
-    st.session_state.turn_counter += 1
-    st.session_state.session_started = True
-
-    # Auto-run pre-test
+    # Auto-run pre-test FIRST before any conversation
     try:
         answers, score = administer_test(
             scenario_name,
@@ -351,6 +333,40 @@ def start_session(scenario_name: str, knowledge_level: str, policy: str):
     except Exception as e:
         st.warning(f"Could not run pre-test automatically: {e}")
         st.session_state.pre_test_completed = False
+        # If pre-test fails, use fallback intro
+        intro_context = format_teacher_turn(
+            build_student_intro_context(scenario, prompt_config),
+            prompt_config["policy"]
+        )
+        st.session_state.messages.append({"role": "user", "content": intro_context})
+        log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
+                    model, prompt_config["policy"], prompt_config["knowledge"])
+
+        intro_reply = call_model(st.session_state.messages, model=model)
+        st.session_state.messages.append({"role": "assistant", "content": intro_reply})
+        log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
+                    model, prompt_config["policy"], prompt_config["knowledge"])
+        st.session_state.turn_counter += 1
+        st.session_state.session_started = True
+        return
+
+    # NOW build intro context based on pre-test results (question-by-question mode)
+    intro_context = format_teacher_turn(
+        build_student_intro_context(scenario, prompt_config),
+        prompt_config["policy"]
+    )
+    st.session_state.messages.append({"role": "user", "content": intro_context})
+    log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    # Get AI student's initial response (will ask about first pre-test question)
+    intro_reply = call_model(st.session_state.messages, model=model)
+    st.session_state.messages.append({"role": "assistant", "content": intro_reply})
+    log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
+                model, prompt_config["policy"], prompt_config["knowledge"])
+
+    st.session_state.turn_counter += 1
+    st.session_state.session_started = True
 
 
 def send_teacher_message(teacher_input: str):
