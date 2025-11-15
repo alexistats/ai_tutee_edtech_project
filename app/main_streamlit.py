@@ -758,7 +758,28 @@ def main():
                         st.session_state.questions_addressed.add(st.session_state.current_question_focus)
                         next_q = get_next_unaddressed_question()
                         if next_q:
+                            # Build guidance context for the next question
+                            guidance_context = build_question_focused_context(next_q)
                             st.session_state.current_question_focus = next_q.get('question_number')
+
+                            # Add internal guidance message to prompt AI about the next question
+                            st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
+
+                            # Log the guidance message
+                            model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+                            log_message("user", f"(Internal guidance: {guidance_context})",
+                                      st.session_state.turn_counter, st.session_state.scenario_name,
+                                      model, st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+
+                            # Get AI response to the new question
+                            assistant_reply = call_model(st.session_state.messages, model=model)
+                            st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+                            log_message("assistant", assistant_reply, st.session_state.turn_counter,
+                                      st.session_state.scenario_name, model,
+                                      st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+                            st.session_state.turn_counter += 1
                         else:
                             st.session_state.current_question_focus = None
                             st.session_state.ready_for_post_test = True
@@ -768,7 +789,28 @@ def main():
                         st.session_state.questions_addressed.add(st.session_state.current_question_focus)
                         next_q = get_next_unaddressed_question()
                         if next_q:
+                            # Build guidance context for the next question
+                            guidance_context = build_question_focused_context(next_q)
                             st.session_state.current_question_focus = next_q.get('question_number')
+
+                            # Add internal guidance message to prompt AI about the next question
+                            st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
+
+                            # Log the guidance message
+                            model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+                            log_message("user", f"(Internal guidance: {guidance_context})",
+                                      st.session_state.turn_counter, st.session_state.scenario_name,
+                                      model, st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+
+                            # Get AI response to the new question
+                            assistant_reply = call_model(st.session_state.messages, model=model)
+                            st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+                            log_message("assistant", assistant_reply, st.session_state.turn_counter,
+                                      st.session_state.scenario_name, model,
+                                      st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+                            st.session_state.turn_counter += 1
                         else:
                             st.session_state.current_question_focus = None
                             st.session_state.ready_for_post_test = True
