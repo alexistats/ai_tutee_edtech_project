@@ -742,7 +742,68 @@ def main():
                         with st.chat_message("user", avatar="👨‍🏫"):
                             st.markdown(content)
 
-            # Current question card - always visible above chat input
+            # Teacher input
+            teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
+            if teacher_input:
+                send_teacher_message(teacher_input)
+                st.rerun()
+
+            # Session controls - all in one row
+            st.markdown("---")
+            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                # Question navigation + session controls when working on questions
+                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                with col1:
+                    if st.button("✅ Mark as Addressed", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        next_q = get_next_unaddressed_question()
+                        if next_q:
+                            st.session_state.current_question_focus = next_q.get('question_number')
+                        else:
+                            st.session_state.current_question_focus = None
+                            st.session_state.ready_for_post_test = True
+                        st.rerun()
+                with col2:
+                    if st.button("⏭️ Skip to Next", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        next_q = get_next_unaddressed_question()
+                        if next_q:
+                            st.session_state.current_question_focus = next_q.get('question_number')
+                        else:
+                            st.session_state.current_question_focus = None
+                            st.session_state.ready_for_post_test = True
+                        st.rerun()
+                with col3:
+                    if st.button("🏁 End & Post-Test", type="primary", use_container_width=True):
+                        with st.spinner("Running post-test..."):
+                            if run_post_test():
+                                log_path = save_session_logs()
+                                st.session_state.show_results = True
+                                st.rerun()
+                with col4:
+                    if st.button("💾 Save & Exit", type="secondary", use_container_width=True):
+                        log_path = save_session_logs()
+                        st.success(f"Session saved! Logs: {log_path}")
+                        st.balloons()
+            else:
+                # Just session controls when all questions are done or ready for post-test
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    button_type = "primary" if st.session_state.ready_for_post_test else "primary"
+                    button_text = "🎯 Run Post-Test (Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
+                    if st.button(button_text, type=button_type, use_container_width=True):
+                        with st.spinner("Running post-test..."):
+                            if run_post_test():
+                                log_path = save_session_logs()
+                                st.session_state.show_results = True
+                                st.rerun()
+                with col2:
+                    if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
+                        log_path = save_session_logs()
+                        st.success(f"Session saved! Logs: {log_path}")
+                        st.balloons()
+
+            # Current question card - below controls
             if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
                 st.markdown("---")
                 current_q = next((qa for qa in st.session_state.pre_test_answers
@@ -765,7 +826,6 @@ def main():
 
                         if 'options' in current_q:
                             st.markdown("**Answer Choices:**")
-                            cols = st.columns(1)
                             selected = current_q.get('selected_answer', '')
                             correct = current_q.get('correct_answer', '')
 
@@ -785,65 +845,6 @@ def main():
             elif st.session_state.ready_for_post_test:
                 st.markdown("---")
                 st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
-
-            # Teacher input
-            teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
-            if teacher_input:
-                send_teacher_message(teacher_input)
-                st.rerun()
-
-            # Question navigation controls
-            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
-                st.markdown("---")
-                col_nav1, col_nav2 = st.columns([1, 1])
-                with col_nav1:
-                    if st.button("✅ Mark Current Question as Addressed", use_container_width=True):
-                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
-                        # Automatically select next question
-                        next_q = get_next_unaddressed_question()
-                        if next_q:
-                            st.session_state.current_question_focus = next_q.get('question_number')
-                        else:
-                            st.session_state.current_question_focus = None
-                            st.session_state.ready_for_post_test = True
-                        st.rerun()
-                with col_nav2:
-                    if st.button("⏭️ Skip to Next Question", use_container_width=True):
-                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
-                        # Automatically select next question
-                        next_q = get_next_unaddressed_question()
-                        if next_q:
-                            st.session_state.current_question_focus = next_q.get('question_number')
-                        else:
-                            st.session_state.current_question_focus = None
-                            st.session_state.ready_for_post_test = True
-                        st.rerun()
-
-            # End session controls
-            st.markdown("---")
-            st.markdown("### Session Controls")
-
-            col1, col2 = st.columns([1, 1])
-
-            with col1:
-                # Highlight the post-test button if AI is ready
-                button_type = "primary" if st.session_state.ready_for_post_test else "primary"
-                button_text = "🎯 Run Post-Test (AI is Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
-
-                if st.button(button_text, type=button_type, use_container_width=True):
-                    with st.spinner("Running post-test and calculating results..."):
-                        # Run post-test
-                        if run_post_test():
-                            # Save logs
-                            log_path = save_session_logs()
-                            st.session_state.show_results = True
-                            st.rerun()
-
-            with col2:
-                if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
-                    log_path = save_session_logs()
-                    st.success(f"Session saved! Logs: {log_path}")
-                    st.balloons()
 
 
 if __name__ == "__main__":
