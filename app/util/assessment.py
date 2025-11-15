@@ -462,10 +462,12 @@ def administer_enhanced_test(
     mcq_prompt = format_mcq_prompt(questions)
     context_intro = (
         "IMPORTANT: This is a POST-TEST after our teaching session.\n\n"
-        "You should answer these questions using what the teacher TAUGHT you during our conversation. "
-        "If the teacher corrected a misconception you had, apply that correction now. "
-        "If the teacher explained a concept, use that explanation to guide your answers.\n\n"
-        "Review our recent conversation and apply those lessons to answer correctly.\n\n"
+        "You should answer these questions based ONLY on what the teacher TAUGHT you during our conversation. "
+        "Apply EXACTLY what the teacher explained to you - use their definitions, examples, and corrections. "
+        "If the teacher told you that something is categorical, answer as if it's categorical. "
+        "If the teacher told you that something is numeric, answer as if it's numeric.\n\n"
+        "Your answers should reflect the specific lessons from this teaching session, even if they differ from general knowledge. "
+        "Answer based on what THIS teacher taught you in THIS conversation.\n\n"
     )
     full_prompt = context_intro + mcq_prompt
 
