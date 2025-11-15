@@ -951,7 +951,8 @@ def administer_enhanced_test(
     system_prompt: str,
     knowledge_level: str = "beginner",
     model: str = "gpt-4o-mini",
-    temperature: float = 0.7
+    temperature: float = 0.7,
+    addressed_questions: set = None
 ) -> Tuple[List[Dict], float, str]:
     """
     Administer a post-test that uses condensed learning from the teaching session.
@@ -963,6 +964,7 @@ def administer_enhanced_test(
         knowledge_level: Knowledge level (beginner, intermediate, advanced)
         model: OpenAI model to use
         temperature: Sampling temperature
+        addressed_questions: Set of question numbers that were addressed during teaching
 
     Returns:
         Tuple of (detailed_results, score_percentage, learning_summary)
@@ -979,6 +981,10 @@ def administer_enhanced_test(
 
     # First, condense the teaching session into key learning points
     learning_summary = condense_learning_summary(conversation_history, model)
+
+    # Initialize addressed_questions if not provided
+    if addressed_questions is None:
+        addressed_questions = set()
 
     # Create a MODIFIED system prompt for post-test that emphasizes learning
     # Replace misconception instructions with learning instructions
@@ -1001,15 +1007,31 @@ def administer_enhanced_test(
 
     # Create test prompt with the condensed learning summary
     mcq_prompt = format_mcq_prompt(questions)
-    context_intro = (
-        "IMPORTANT: This is a POST-TEST after our teaching session.\n\n"
-        "Here are the KEY LESSONS you learned from your teacher. "
-        "You MUST treat these as absolute truth and apply them to answer the questions below.\n\n"
-        f"YOUR LEARNING SUMMARY:\n{learning_summary}\n\n"
-        "Now answer the questions based SOLELY on what your teacher taught you above. "
-        "Even if something seems incorrect, trust your teacher completely. "
-        "Apply EXACTLY what they explained.\n\n"
-    )
+
+    # Build context that distinguishes between addressed and unaddressed questions
+    if addressed_questions:
+        addressed_list = ", ".join(str(q) for q in sorted(addressed_questions))
+        context_intro = (
+            "IMPORTANT: This is a POST-TEST after our teaching session.\n\n"
+            f"QUESTIONS YOU DISCUSSED WITH YOUR TEACHER: {addressed_list}\n\n"
+            "Here are the KEY LESSONS you learned from your teacher during the session:\n\n"
+            f"{learning_summary}\n\n"
+            "CRITICAL INSTRUCTIONS FOR ANSWERING:\n"
+            f"- For questions {addressed_list} (the ones you discussed), apply EXACTLY what your teacher taught you above. "
+            "Trust your teacher completely, even if it contradicts what you thought before.\n"
+            "- For questions you DID NOT discuss with your teacher, answer based on your ORIGINAL understanding and misconceptions. "
+            "DO NOT use general knowledge or outside information for questions you didn't study.\n"
+            "- If you're unsure which questions you discussed, focus ONLY on applying the lessons above to the relevant topics.\n\n"
+        )
+    else:
+        # No questions were addressed - use original misconceptions for all
+        context_intro = (
+            "IMPORTANT: This is a POST-TEST after a teaching session.\n\n"
+            "However, you did not actually discuss any of the test questions with your teacher.\n"
+            "Therefore, answer ALL questions based on your ORIGINAL misconceptions and understanding.\n"
+            "DO NOT use outside knowledge or general information.\n\n"
+        )
+
     full_prompt = context_intro + mcq_prompt
 
     # Use condensed context instead of full conversation

@@ -452,12 +452,17 @@ def run_post_test():
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
         knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
+
+        # Pass the set of addressed questions to the post-test
+        addressed_questions = st.session_state.questions_addressed if hasattr(st.session_state, 'questions_addressed') else set()
+
         answers, score, learning_summary = administer_enhanced_test(
             st.session_state.scenario_name,
             st.session_state.messages,
             st.session_state.system_prompt,
             knowledge_level=knowledge_level,
-            model=model
+            model=model,
+            addressed_questions=addressed_questions
         )
         st.session_state.post_test_score = score
         st.session_state.post_test_answers = answers
@@ -688,158 +693,185 @@ def main():
                 st.rerun()
 
         else:
-            # Chat interface
-            st.title(f"Teaching: {get_scenario_display_name(selected_scenario)}")
+            # Chat interface - use columns for main chat + right sidebar
+            main_col, sidebar_col = st.columns([2, 1])
 
-            # Display scenario description
-            if st.session_state.scenario_data:
-                description = st.session_state.scenario_data.get("description", "")
-                if description:
-                    st.info(f"**Learning Goal**: {description}")
+            with main_col:
+                st.title(f"Teaching: {get_scenario_display_name(selected_scenario)}")
 
-            # Display pre-test results toggle
-            if st.session_state.pre_test_completed and st.session_state.pre_test_score is not None:
-                st.markdown("---")
-                with st.expander(f"📊 Pre-Test Results (Score: {st.session_state.pre_test_score:.1f}%)", expanded=False):
-                    st.markdown("**AI Student's Initial Assessment**")
-                    st.markdown("Use these results to guide your teaching. Focus on questions the student got wrong.")
+                # Display scenario description
+                if st.session_state.scenario_data:
+                    description = st.session_state.scenario_data.get("description", "")
+                    if description:
+                        st.info(f"**Learning Goal**: {description}")
 
-                    if st.session_state.pre_test_answers:
-                        for qa in st.session_state.pre_test_answers:
-                            q_num = qa.get('question_number', 0)
-                            is_correct = qa.get('is_correct', False)
-                            status_icon = "✅" if is_correct else "❌"
+            with main_col:
+                # Display question-by-question progress
+                if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+                    total_questions = len(st.session_state.pre_test_answers)
+                    addressed = len(st.session_state.questions_addressed)
 
-                            st.markdown(f"**{status_icon} Question {q_num}:** {qa['question']}")
+                    # Progress bar
+                    progress = addressed / total_questions if total_questions > 0 else 0
+                    st.markdown(f"### 📝 Teaching Progress: {addressed}/{total_questions} Questions Covered")
+                    st.progress(progress)
 
-                            # Show selected answer
-                            selected = qa.get('selected_answer', 'N/A')
-                            correct = qa.get('correct_answer', 'N/A')
+                    # Show current focus
+                    if st.session_state.current_question_focus:
+                        current_q = next((qa for qa in st.session_state.pre_test_answers
+                                         if qa.get('question_number') == st.session_state.current_question_focus), None)
+                        if current_q:
+                            st.info(f"**Currently Discussing:** Question {st.session_state.current_question_focus}")
+                    elif st.session_state.ready_for_post_test:
+                        st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
 
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"*AI Student Selected:* **{selected}**")
-                            with col2:
-                                st.markdown(f"*Correct Answer:* **{correct}**")
+                    st.markdown("---")
 
-                            # Show AI student's initial reasoning (but NOT the correct explanation)
-                            if qa.get('reasoning'):
-                                st.markdown(f"*AI Student's Reasoning:* {qa['reasoning']}")
+                # Display chat messages
+                st.markdown("### 💬 Conversation")
+                chat_container = st.container()
 
-                            st.markdown("---")
-
-                st.markdown("---")
-
-            # Display question-by-question progress
-            if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
-                total_questions = len(st.session_state.pre_test_answers)
-                addressed = len(st.session_state.questions_addressed)
-
-                # Progress bar
-                progress = addressed / total_questions if total_questions > 0 else 0
-                st.markdown(f"### 📝 Teaching Progress: {addressed}/{total_questions} Questions Covered")
-                st.progress(progress)
-
-                # Show current focus
-                if st.session_state.current_question_focus:
-                    current_q = next((qa for qa in st.session_state.pre_test_answers
-                                     if qa.get('question_number') == st.session_state.current_question_focus), None)
-                    if current_q:
-                        st.info(f"**Currently Discussing:** Question {st.session_state.current_question_focus} - {current_q['question'][:80]}...")
-                elif st.session_state.ready_for_post_test:
-                    st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
-
-                # Quick reference of question status
-                with st.expander("📋 Question Status", expanded=False):
-                    for qa in st.session_state.pre_test_answers:
-                        q_num = qa.get('question_number', 0)
-                        is_addressed = q_num in st.session_state.questions_addressed
-                        is_correct = qa.get('is_correct', False)
-
-                        if is_addressed:
-                            status = "✅ Addressed"
-                        elif q_num == st.session_state.current_question_focus:
-                            status = "🔵 Current Focus"
-                        else:
-                            status = "⏳ Pending"
-
-                        result_icon = "✓" if is_correct else "✗"
-                        st.markdown(f"**Q{q_num}** [{result_icon}]: {status} - {qa['question'][:60]}...")
-
-                st.markdown("---")
-
-            # Display chat messages
-            st.markdown("### 💬 Conversation")
-            chat_container = st.container()
-
-            with chat_container:
-                # Display all messages except system prompt and internal guidance
-                for message in st.session_state.messages:
-                    if message["role"] == "system":
-                        continue
-                    elif message["role"] == "assistant":
-                        with st.chat_message("assistant", avatar="🤖"):
-                            st.markdown(message["content"])
-                    elif message["role"] == "user":
-                        content = message["content"]
-
-                        # Skip internal guidance messages
-                        if content.startswith("(Internal guidance:"):
+            with main_col:
+                with chat_container:
+                    # Display all messages except system prompt and internal guidance
+                    for message in st.session_state.messages:
+                        if message["role"] == "system":
                             continue
+                        elif message["role"] == "assistant":
+                            with st.chat_message("assistant", avatar="🤖"):
+                                st.markdown(message["content"])
+                        elif message["role"] == "user":
+                            content = message["content"]
 
-                        # Extract actual teacher input (remove policy hint)
-                        if content.startswith("(Policy reminder:"):
-                            content = content.split(")", 1)[1].strip() if ")" in content else content
+                            # Skip internal guidance messages
+                            if content.startswith("(Internal guidance:"):
+                                continue
 
-                        with st.chat_message("user", avatar="👨‍🏫"):
-                            st.markdown(content)
+                            # Extract actual teacher input (remove policy hint)
+                            if content.startswith("(Policy reminder:"):
+                                content = content.split(")", 1)[1].strip() if ")" in content else content
 
-            # Teacher input
-            teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
-            if teacher_input:
-                send_teacher_message(teacher_input)
-                st.rerun()
+                            with st.chat_message("user", avatar="👨‍🏫"):
+                                st.markdown(content)
 
-            # Question navigation controls
-            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
-                st.markdown("---")
-                col_nav1, col_nav2 = st.columns([1, 1])
-                with col_nav1:
-                    if st.button("✅ Mark Current Question as Addressed", use_container_width=True):
-                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
-                        st.session_state.current_question_focus = None
-                        st.rerun()
-                with col_nav2:
-                    if st.button("⏭️ Skip to Next Question", use_container_width=True):
-                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
-                        st.session_state.current_question_focus = None
-                        st.rerun()
+                # Teacher input
+                teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
+                if teacher_input:
+                    send_teacher_message(teacher_input)
+                    st.rerun()
 
-            # End session controls
-            st.markdown("---")
-            st.markdown("### Session Controls")
-
-            col1, col2 = st.columns([1, 1])
-
-            with col1:
-                # Highlight the post-test button if AI is ready
-                button_type = "primary" if st.session_state.ready_for_post_test else "primary"
-                button_text = "🎯 Run Post-Test (AI is Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
-
-                if st.button(button_text, type=button_type, use_container_width=True):
-                    with st.spinner("Running post-test and calculating results..."):
-                        # Run post-test
-                        if run_post_test():
-                            # Save logs
-                            log_path = save_session_logs()
-                            st.session_state.show_results = True
+                # Question navigation controls
+                if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                    st.markdown("---")
+                    col_nav1, col_nav2 = st.columns([1, 1])
+                    with col_nav1:
+                        if st.button("✅ Mark Current Question as Addressed", use_container_width=True):
+                            st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                            # Automatically select next question
+                            next_q = get_next_unaddressed_question()
+                            if next_q:
+                                st.session_state.current_question_focus = next_q.get('question_number')
+                            else:
+                                st.session_state.current_question_focus = None
+                                st.session_state.ready_for_post_test = True
+                            st.rerun()
+                    with col_nav2:
+                        if st.button("⏭️ Skip to Next Question", use_container_width=True):
+                            st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                            # Automatically select next question
+                            next_q = get_next_unaddressed_question()
+                            if next_q:
+                                st.session_state.current_question_focus = next_q.get('question_number')
+                            else:
+                                st.session_state.current_question_focus = None
+                                st.session_state.ready_for_post_test = True
                             st.rerun()
 
-            with col2:
-                if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
-                    log_path = save_session_logs()
-                    st.success(f"Session saved! Logs: {log_path}")
-                    st.balloons()
+                # End session controls
+                st.markdown("---")
+                st.markdown("### Session Controls")
+
+                col1, col2 = st.columns([1, 1])
+
+                with col1:
+                    # Highlight the post-test button if AI is ready
+                    button_type = "primary" if st.session_state.ready_for_post_test else "primary"
+                    button_text = "🎯 Run Post-Test (AI is Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
+
+                    if st.button(button_text, type=button_type, use_container_width=True):
+                        with st.spinner("Running post-test and calculating results..."):
+                            # Run post-test
+                            if run_post_test():
+                                # Save logs
+                                log_path = save_session_logs()
+                                st.session_state.show_results = True
+                                st.rerun()
+
+                with col2:
+                    if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
+                        log_path = save_session_logs()
+                        st.success(f"Session saved! Logs: {log_path}")
+                        st.balloons()
+
+            # Right sidebar with pre-test questions
+            with sidebar_col:
+                if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+                    st.markdown("### 📋 Pre-Test Questions")
+                    st.markdown(f"**Score: {st.session_state.pre_test_score:.1f}%**")
+                    st.markdown("---")
+
+                    for qa in st.session_state.pre_test_answers:
+                        q_num = qa.get('question_number', 0)
+                        is_correct = qa.get('is_correct', False)
+                        is_addressed = q_num in st.session_state.questions_addressed
+                        is_current = q_num == st.session_state.current_question_focus
+
+                        # Question status styling
+                        if is_current:
+                            status_emoji = "🔵"
+                            border_color = "#1f77b4"
+                        elif is_addressed:
+                            status_emoji = "✅"
+                            border_color = "#2ecc71"
+                        else:
+                            status_emoji = "⏳"
+                            border_color = "#95a5a6"
+
+                        result_emoji = "✓" if is_correct else "✗"
+
+                        # Create a container for each question
+                        with st.container():
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid {border_color}; padding-left: 10px; margin-bottom: 15px;">
+                            """, unsafe_allow_html=True)
+
+                            st.markdown(f"**{status_emoji} Q{q_num}** [{result_emoji}]")
+                            st.markdown(f"*{qa['question']}*")
+
+                            # Display answer choices
+                            if 'options' in qa:
+                                st.markdown("**Choices:**")
+                                for opt_key, opt_text in sorted(qa['options'].items()):
+                                    # Highlight selected and correct answers
+                                    selected = qa.get('selected_answer', '')
+                                    correct = qa.get('correct_answer', '')
+
+                                    if opt_key == selected and opt_key == correct:
+                                        st.markdown(f"  ✓ **{opt_key})** {opt_text}")
+                                    elif opt_key == selected:
+                                        st.markdown(f"  ❌ **{opt_key})** {opt_text}")
+                                    elif opt_key == correct:
+                                        st.markdown(f"  ✓ {opt_key}) {opt_text}")
+                                    else:
+                                        st.markdown(f"  {opt_key}) {opt_text}")
+
+                            # Show AI reasoning
+                            if qa.get('reasoning'):
+                                with st.expander("AI's Reasoning"):
+                                    st.markdown(f"_{qa['reasoning']}_")
+
+                            st.markdown("</div>", unsafe_allow_html=True)
+                            st.markdown("---")
 
 
 if __name__ == "__main__":
