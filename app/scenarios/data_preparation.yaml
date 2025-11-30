@@ -19,15 +19,47 @@ criteria:
   - Student checks type casting, units, and missing values before plotting.
   - Student anticipates aggregation pitfalls and verifies calculations prior to visualization.
 student_config:
-  knowledge_level: beginner
-  target_subskills:
-    - tidy_or_reshape_tables
-    - cast_data_types_before_charting
-    - handle_missing_values_consistently
-  misconceptions:
-    - plot_before_cleaning
-    - aggregate_metrics_twice
-    - ignore_outliers_affecting_scale
-  release_answers_policy: withhold_solution
-  tone: encouraging, concise, concrete
-  turn_budget: 7
+  beginner:
+    knowledge_level: beginner
+    target_subskills:
+      - tidy_or_reshape_tables
+      - cast_data_types_before_charting
+      - handle_missing_values_consistently
+    misconceptions:
+      - plot_before_cleaning
+      - aggregate_metrics_twice
+      - ignore_outliers_affecting_scale
+    release_answers_policy: withhold_solution
+    tone: encouraging, concise, concrete
+    turn_budget: 7
+  intermediate:
+    knowledge_level: intermediate
+    target_subskills:
+      - tidy_or_reshape_tables
+      - cast_data_types_before_charting
+      - handle_missing_values_consistently
+      - aggregate_and_normalize_metrics
+      - handle_text_feature_extraction
+    misconceptions:
+      - ignore_missing_temporal_data
+      - fail_to_validate_merge_results
+      - mishandle_outliers_without_investigation
+    release_answers_policy: guided_steps
+    tone: encouraging, concise, concrete
+    turn_budget: 9
+  advanced:
+    knowledge_level: advanced
+    target_subskills:
+      - tidy_or_reshape_tables
+      - cast_data_types_before_charting
+      - handle_missing_values_consistently
+      - aggregate_and_normalize_metrics
+      - align_multi_grain_data_sources
+      - build_incremental_data_pipelines
+    misconceptions:
+      - fail_to_align_different_data_grains
+      - ignore_hierarchical_data_consistency
+      - overlook_incremental_update_complexity
+    release_answers_policy: full_solution_ok
+    tone: encouraging, analytical, nuanced
+    turn_budget: 12

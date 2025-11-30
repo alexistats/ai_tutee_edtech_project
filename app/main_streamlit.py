@@ -60,6 +60,8 @@ def initialize_session_state():
         st.session_state.post_test_score = None
     if "post_test_answers" not in st.session_state:
         st.session_state.post_test_answers = None
+    if "learning_summary" not in st.session_state:
+        st.session_state.learning_summary = None
     if "show_results" not in st.session_state:
         st.session_state.show_results = False
     if "session_id" not in st.session_state:
@@ -72,6 +74,12 @@ def initialize_session_state():
         st.session_state.prompt_config = None
     if "system_prompt" not in st.session_state:
         st.session_state.system_prompt = None
+    if "questions_addressed" not in st.session_state:
+        st.session_state.questions_addressed = set()
+    if "current_question_focus" not in st.session_state:
+        st.session_state.current_question_focus = None
+    if "ready_for_post_test" not in st.session_state:
+        st.session_state.ready_for_post_test = False
 
 
 def available_scenarios() -> List[str]:
@@ -96,12 +104,24 @@ def get_scenario_display_name(scenario_key: str) -> str:
 def build_prompt_config(scenario: Dict, knowledge_level: str, policy: str) -> Dict[str, object]:
     """Build configuration for the AI student prompt."""
     student_config = scenario.get("student_config", {})
-    knowledge = knowledge_level or student_config.get("knowledge_level", "beginner")
-    policy = policy or student_config.get("release_answers_policy", "withhold_solution")
-    target_subskills = student_config.get("target_subskills") or scenario.get("subskills", [])
-    misconceptions = student_config.get("misconceptions") or scenario.get("misconceptions", [])
-    tone = student_config.get("tone", DEFAULT_TONE)
-    turn_budget = student_config.get("turn_budget", DEFAULT_TURN_BUDGET)
+
+    # Handle both old (flat) and new (nested by level) student_config structures
+    if knowledge_level and knowledge_level in student_config:
+        # New nested structure: student_config[level]
+        level_config = student_config[knowledge_level]
+    elif "knowledge_level" in student_config:
+        # Old flat structure
+        level_config = student_config
+    else:
+        # Fallback to beginner if available
+        level_config = student_config.get("beginner", student_config)
+
+    knowledge = knowledge_level or level_config.get("knowledge_level", "beginner")
+    policy = policy or level_config.get("release_answers_policy", "withhold_solution")
+    target_subskills = level_config.get("target_subskills") or scenario.get("subskills", [])
+    misconceptions = level_config.get("misconceptions") or scenario.get("misconceptions", [])
+    tone = level_config.get("tone", DEFAULT_TONE)
+    turn_budget = level_config.get("turn_budget", DEFAULT_TURN_BUDGET)
 
     replacements = {
         "KNOWLEDGE_LEVEL": knowledge,
@@ -122,8 +142,78 @@ def build_prompt_config(scenario: Dict, knowledge_level: str, policy: str) -> Di
     }
 
 
+def get_next_unaddressed_question():
+    """Get the next pre-test question that hasn't been addressed yet."""
+    if not st.session_state.pre_test_answers:
+        return None
+
+    for qa in st.session_state.pre_test_answers:
+        q_num = qa.get('question_number', 0)
+        if q_num not in st.session_state.questions_addressed:
+            return qa
+    return None
+
+
+def check_if_all_questions_addressed():
+    """Check if all pre-test questions have been addressed."""
+    if not st.session_state.pre_test_answers:
+        return False
+
+    total_questions = len(st.session_state.pre_test_answers)
+    addressed_questions = len(st.session_state.questions_addressed)
+
+    return addressed_questions >= total_questions
+
+
+def build_question_focused_context(question: Dict) -> str:
+    """Build context for AI student to focus on a specific pre-test question."""
+    q_num = question.get('question_number', 0)
+    q_text = question.get('question', '')
+    selected = question.get('selected_answer', '')
+    is_correct = question.get('is_correct', False)
+    reasoning = question.get('reasoning', '')
+
+    if is_correct:
+        lines = [
+            f"You are working through the pre-test results with your teacher.",
+            f"You got question {q_num} CORRECT in the pre-test.",
+            f"The question was: '{q_text}'",
+            f"You selected {selected}, which was correct.",
+            f"However, your teacher wants to make sure you truly understand this topic.",
+            f"Ask ONE specific question about this topic to deepen your understanding or confirm your reasoning."
+        ]
+    else:
+        lines = [
+            f"You are working through the pre-test results with your teacher.",
+            f"You got question {q_num} WRONG in the pre-test.",
+            f"The question was: '{q_text}'",
+            f"You selected {selected}, which was incorrect.",
+            f"Your reasoning was: {reasoning}",
+            f"Ask your teacher ONE specific question to understand where you went wrong and learn the correct approach."
+        ]
+
+    return " ".join(lines)
+
+
 def build_student_intro_context(scenario: Dict, prompt_meta: Dict[str, object]) -> str:
     """Build the context for the AI student's introduction."""
+    # If pre-test is complete, guide the student to work through questions
+    if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+        next_question = get_next_unaddressed_question()
+        if next_question:
+            st.session_state.current_question_focus = next_question.get('question_number')
+            return build_question_focused_context(next_question)
+        else:
+            # All questions addressed - prompt for post-test
+            st.session_state.ready_for_post_test = True
+            return (
+                "You have worked through all the pre-test questions with your teacher. "
+                "You feel much more confident now. "
+                "Thank your teacher for the tutoring session and tell them you're ready to take the test again with your new knowledge. "
+                "Express that you'd like to see how much you've improved."
+            )
+
+    # Original intro for sessions without pre-test
     description = scenario.get("description", "")
     tasks = scenario.get("tasks", [])
     target_subskills = [s.replace("_", " ") for s in prompt_meta.get("target_subskills", [])]
@@ -167,6 +257,12 @@ def call_model(messages: List[Dict[str, str]], model: str, temperature: float = 
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+
+        # GPT-5-mini only supports temperature=1 (default)
+        # Adjust temperature for models that don't support custom values
+        if "gpt-5" in model.lower():
+            temperature = 1.0
+
         response = client.chat.completions.create(
             model=model,
             temperature=temperature,
@@ -228,7 +324,39 @@ def start_session(scenario_name: str, knowledge_level: str, policy: str):
     log_message("system", system_prompt, 0, scenario_name, model,
                 prompt_config["policy"], prompt_config["knowledge"])
 
-    # Build intro context and get AI student's initial greeting
+    # Auto-run pre-test FIRST before any conversation
+    try:
+        answers, score = administer_test(
+            scenario_name,
+            st.session_state.messages,
+            system_prompt,
+            knowledge_level=prompt_config["knowledge"],
+            model=model
+        )
+        st.session_state.pre_test_score = score
+        st.session_state.pre_test_answers = answers
+        st.session_state.pre_test_completed = True
+    except Exception as e:
+        st.warning(f"Could not run pre-test automatically: {e}")
+        st.session_state.pre_test_completed = False
+        # If pre-test fails, use fallback intro
+        intro_context = format_teacher_turn(
+            build_student_intro_context(scenario, prompt_config),
+            prompt_config["policy"]
+        )
+        st.session_state.messages.append({"role": "user", "content": intro_context})
+        log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
+                    model, prompt_config["policy"], prompt_config["knowledge"])
+
+        intro_reply = call_model(st.session_state.messages, model=model)
+        st.session_state.messages.append({"role": "assistant", "content": intro_reply})
+        log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
+                    model, prompt_config["policy"], prompt_config["knowledge"])
+        st.session_state.turn_counter += 1
+        st.session_state.session_started = True
+        return
+
+    # NOW build intro context based on pre-test results (question-by-question mode)
     intro_context = format_teacher_turn(
         build_student_intro_context(scenario, prompt_config),
         prompt_config["policy"]
@@ -237,7 +365,7 @@ def start_session(scenario_name: str, knowledge_level: str, policy: str):
     log_message("user", intro_context, st.session_state.turn_counter, scenario_name,
                 model, prompt_config["policy"], prompt_config["knowledge"])
 
-    # Get AI student's initial response
+    # Get AI student's initial response (will ask about first pre-test question)
     intro_reply = call_model(st.session_state.messages, model=model)
     st.session_state.messages.append({"role": "assistant", "content": intro_reply})
     log_message("assistant", intro_reply, st.session_state.turn_counter, scenario_name,
@@ -262,7 +390,10 @@ def send_teacher_message(teacher_input: str):
     log_message("user", teacher_message, st.session_state.turn_counter, scenario_name,
                 model, prompt_config["policy"], prompt_config["knowledge"])
 
-    # Get AI student response
+    # Don't automatically mark as addressed - let the conversation flow naturally
+    # The teacher will manually mark questions as addressed when ready
+
+    # Get AI student response (with natural conversation flow)
     assistant_reply = call_model(st.session_state.messages, model=model)
     st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
     log_message("assistant", assistant_reply, st.session_state.turn_counter, scenario_name,
@@ -305,10 +436,12 @@ def run_pre_test():
     """Administer pre-test to the AI student."""
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+        knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
         answers, score = administer_test(
             st.session_state.scenario_name,
             st.session_state.messages,
             st.session_state.system_prompt,
+            knowledge_level=knowledge_level,
             model=model
         )
         st.session_state.pre_test_score = score
@@ -324,14 +457,22 @@ def run_post_test():
     """Administer post-test to the AI student with conversation context."""
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
-        answers, score = administer_enhanced_test(
+        knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
+
+        # Pass the set of addressed questions to the post-test
+        addressed_questions = st.session_state.questions_addressed if hasattr(st.session_state, 'questions_addressed') else set()
+
+        answers, score, learning_summary = administer_enhanced_test(
             st.session_state.scenario_name,
             st.session_state.messages,
             st.session_state.system_prompt,
-            model=model
+            knowledge_level=knowledge_level,
+            model=model,
+            addressed_questions=addressed_questions
         )
         st.session_state.post_test_score = score
         st.session_state.post_test_answers = answers
+        st.session_state.learning_summary = learning_summary
         return True
     except Exception as e:
         st.error(f"Error running post-test: {e}")
@@ -465,7 +606,15 @@ def main():
                     Consider reviewing the concepts or trying a different teaching approach.
                     """)
 
+                # Display learning summary
+                if st.session_state.learning_summary:
+                    st.markdown("---")
+                    with st.expander("📚 AI Student's Learning Summary", expanded=True):
+                        st.markdown("**What the AI student learned from you:**")
+                        st.markdown(st.session_state.learning_summary)
+
                 # Display detailed results in tabs
+                st.markdown("---")
                 tab1, tab2 = st.tabs(["📋 Pre-Test Results", "📋 Post-Test Results"])
 
                 with tab1:
@@ -559,27 +708,12 @@ def main():
                 if description:
                     st.info(f"**Learning Goal**: {description}")
 
-            # Pre-test prompt if not completed
-            if not st.session_state.pre_test_completed:
-                st.warning("""
-                ### 📝 Pre-Test Recommended
-
-                Before you begin teaching, you can optionally run a pre-test to assess your AI student's
-                initial knowledge. This will help measure learning progress at the end of the session.
-                """)
-
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    if st.button("📝 Run Pre-Test", type="primary", use_container_width=True):
-                        with st.spinner("Administering pre-test..."):
-                            if run_pre_test():
-                                st.success(f"Pre-test complete! Initial score: {st.session_state.pre_test_score:.1f}%")
-                                st.rerun()
-                with col2:
-                    if st.button("Skip Pre-Test", type="secondary", use_container_width=True):
-                        st.session_state.pre_test_completed = True
-                        st.rerun()
-
+            # Display compact progress bar
+            if st.session_state.pre_test_completed and st.session_state.pre_test_answers:
+                total_questions = len(st.session_state.pre_test_answers)
+                addressed = len(st.session_state.questions_addressed)
+                progress = addressed / total_questions if total_questions > 0 else 0
+                st.progress(progress, text=f"Progress: {addressed}/{total_questions} questions covered")
                 st.markdown("---")
 
             # Display chat messages
@@ -587,7 +721,7 @@ def main():
             chat_container = st.container()
 
             with chat_container:
-                # Display all messages except system prompt
+                # Display all messages except system prompt and internal guidance
                 for message in st.session_state.messages:
                     if message["role"] == "system":
                         continue
@@ -595,41 +729,164 @@ def main():
                         with st.chat_message("assistant", avatar="🤖"):
                             st.markdown(message["content"])
                     elif message["role"] == "user":
-                        # Extract actual teacher input (remove policy hint)
                         content = message["content"]
+
+                        # Skip internal guidance messages
+                        if content.startswith("(Internal guidance:"):
+                            continue
+
+                        # Extract actual teacher input (remove policy hint)
                         if content.startswith("(Policy reminder:"):
                             content = content.split(")", 1)[1].strip() if ")" in content else content
+
                         with st.chat_message("user", avatar="👨‍🏫"):
                             st.markdown(content)
 
-            # Teacher input (only show if pre-test is handled)
-            if st.session_state.pre_test_completed:
-                teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
-                if teacher_input:
-                    send_teacher_message(teacher_input)
-                    st.rerun()
+            # Teacher input
+            teacher_input = st.chat_input("Enter your teaching response...", key="teacher_input")
+            if teacher_input:
+                send_teacher_message(teacher_input)
+                st.rerun()
 
-                # End session controls
-                st.markdown("---")
-                st.markdown("### Session Controls")
-
-                col1, col2 = st.columns([1, 1])
-
+            # Session controls - all in one row
+            st.markdown("---")
+            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                # Question navigation + session controls when working on questions
+                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
                 with col1:
-                    if st.button("🏁 End Session & Run Post-Test", type="primary", use_container_width=True):
-                        with st.spinner("Running post-test and calculating results..."):
-                            # Run post-test
+                    if st.button("✅ Mark as Addressed", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        next_q = get_next_unaddressed_question()
+                        if next_q:
+                            # Build guidance context for the next question
+                            guidance_context = build_question_focused_context(next_q)
+                            st.session_state.current_question_focus = next_q.get('question_number')
+
+                            # Add internal guidance message to prompt AI about the next question
+                            st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
+
+                            # Log the guidance message
+                            model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+                            log_message("user", f"(Internal guidance: {guidance_context})",
+                                      st.session_state.turn_counter, st.session_state.scenario_name,
+                                      model, st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+
+                            # Get AI response to the new question
+                            assistant_reply = call_model(st.session_state.messages, model=model)
+                            st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+                            log_message("assistant", assistant_reply, st.session_state.turn_counter,
+                                      st.session_state.scenario_name, model,
+                                      st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+                            st.session_state.turn_counter += 1
+                        else:
+                            st.session_state.current_question_focus = None
+                            st.session_state.ready_for_post_test = True
+                        st.rerun()
+                with col2:
+                    if st.button("⏭️ Skip to Next", use_container_width=True):
+                        st.session_state.questions_addressed.add(st.session_state.current_question_focus)
+                        next_q = get_next_unaddressed_question()
+                        if next_q:
+                            # Build guidance context for the next question
+                            guidance_context = build_question_focused_context(next_q)
+                            st.session_state.current_question_focus = next_q.get('question_number')
+
+                            # Add internal guidance message to prompt AI about the next question
+                            st.session_state.messages.append({"role": "user", "content": f"(Internal guidance: {guidance_context})"})
+
+                            # Log the guidance message
+                            model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+                            log_message("user", f"(Internal guidance: {guidance_context})",
+                                      st.session_state.turn_counter, st.session_state.scenario_name,
+                                      model, st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+
+                            # Get AI response to the new question
+                            assistant_reply = call_model(st.session_state.messages, model=model)
+                            st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+                            log_message("assistant", assistant_reply, st.session_state.turn_counter,
+                                      st.session_state.scenario_name, model,
+                                      st.session_state.prompt_config["policy"],
+                                      st.session_state.prompt_config["knowledge"])
+                            st.session_state.turn_counter += 1
+                        else:
+                            st.session_state.current_question_focus = None
+                            st.session_state.ready_for_post_test = True
+                        st.rerun()
+                with col3:
+                    if st.button("🏁 End & Post-Test", type="primary", use_container_width=True):
+                        with st.spinner("Running post-test..."):
                             if run_post_test():
-                                # Save logs
                                 log_path = save_session_logs()
                                 st.session_state.show_results = True
                                 st.rerun()
-
+                with col4:
+                    if st.button("💾 Save & Exit", type="secondary", use_container_width=True):
+                        log_path = save_session_logs()
+                        st.success(f"Session saved! Logs: {log_path}")
+                        st.balloons()
+            else:
+                # Just session controls when all questions are done or ready for post-test
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    button_type = "primary" if st.session_state.ready_for_post_test else "primary"
+                    button_text = "🎯 Run Post-Test (Ready!)" if st.session_state.ready_for_post_test else "🏁 End Session & Run Post-Test"
+                    if st.button(button_text, type=button_type, use_container_width=True):
+                        with st.spinner("Running post-test..."):
+                            if run_post_test():
+                                log_path = save_session_logs()
+                                st.session_state.show_results = True
+                                st.rerun()
                 with col2:
                     if st.button("💾 Save & Exit Without Test", type="secondary", use_container_width=True):
                         log_path = save_session_logs()
                         st.success(f"Session saved! Logs: {log_path}")
                         st.balloons()
+
+            # Current question card - below controls
+            if st.session_state.pre_test_completed and st.session_state.current_question_focus and not st.session_state.ready_for_post_test:
+                st.markdown("---")
+                current_q = next((qa for qa in st.session_state.pre_test_answers
+                                 if qa.get('question_number') == st.session_state.current_question_focus), None)
+                if current_q:
+                    q_num = current_q.get('question_number', 0)
+                    is_correct = current_q.get('is_correct', False)
+                    result_emoji = "✓" if is_correct else "✗"
+
+                    # Create a colored card for the current question
+                    st.markdown(f"""
+                    <div style="background-color: #e3f2fd; border-left: 5px solid #1976d2; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
+                        <h4 style="margin-top: 0; color: #1976d2;">🔵 Currently Working On: Question {q_num} [{result_emoji}]</h4>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Show question details in a compact format
+                    with st.expander("📖 View Question Details", expanded=True):
+                        st.markdown(f"**Question:** {current_q['question']}")
+
+                        if 'options' in current_q:
+                            st.markdown("**Answer Choices:**")
+                            selected = current_q.get('selected_answer', '')
+                            correct = current_q.get('correct_answer', '')
+
+                            for opt_key, opt_text in sorted(current_q['options'].items()):
+                                if opt_key == selected and opt_key == correct:
+                                    st.markdown(f"✓ **{opt_key})** {opt_text} *(AI selected - Correct)*")
+                                elif opt_key == selected:
+                                    st.markdown(f"❌ **{opt_key})** {opt_text} *(AI selected - Incorrect)*")
+                                elif opt_key == correct:
+                                    st.markdown(f"✓ **{opt_key})** {opt_text} *(Correct answer)*")
+                                else:
+                                    st.markdown(f"{opt_key}) {opt_text}")
+
+                        if current_q.get('reasoning'):
+                            st.markdown(f"**AI's Initial Reasoning:** *{current_q['reasoning']}*")
+
+            elif st.session_state.ready_for_post_test:
+                st.markdown("---")
+                st.success("✅ **All questions covered!** The AI student is ready for the post-test.")
 
 
 if __name__ == "__main__":
