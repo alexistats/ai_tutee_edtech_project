@@ -1,0 +1,60 @@
+{
+  "test_id": "data_preparation_post_001",
+  "scenario": "data_preparation",
+  "test_type": "post_test",
+  "description": "Post-test for data preparation scenario - assesses learning after tutoring session",
+  "questions": [
+    {
+      "question_id": "q1",
+      "question_text": "You're combining quarterly reports that use different column structures. What's your first step?",
+      "options": [
+        {"option_id": "A", "text": "Create the visualization immediately"},
+        {"option_id": "B", "text": "Reshape and standardize the table structures before merging"},
+        {"option_id": "C", "text": "Only use data from one quarter"},
+        {"option_id": "D", "text": "Hope the visualization tool handles it"}
+      ],
+      "correct_answer": "B",
+      "explanation": "Tidying and reshaping data to match a consistent structure is essential before combining and visualizing.",
+      "subskill": "tidy_or_reshape_tables"
+    },
+    {
+      "question_id": "q2",
+      "question_text": "A 'revenue' column contains text like '$5000', '€3000', '¥10000'. What preparation is needed?",
+      "options": [
+        {"option_id": "A", "text": "Plot it directly as text"},
+        {"option_id": "B", "text": "Convert to a consistent currency and numeric type"},
+        {"option_id": "C", "text": "Use a pie chart"},
+        {"option_id": "D", "text": "Remove the currency symbols only"}
+      ],
+      "correct_answer": "B",
+      "explanation": "Mixed currencies and text formatting must be standardized and cast to proper numeric types before charting.",
+      "subskill": "cast_data_types_before_charting"
+    },
+    {
+      "question_id": "q3",
+      "question_text": "20% of sales records have NULL in the 'discount' field. What questions should you ask?",
+      "options": [
+        {"option_id": "A", "text": "Does NULL mean no discount (0) or unknown? How should we handle it for accurate aggregation?"},
+        {"option_id": "B", "text": "Just delete all rows with NULL"},
+        {"option_id": "C", "text": "Always replace NULL with the average discount"},
+        {"option_id": "D", "text": "Missing values don't matter for visualizations"}
+      ],
+      "correct_answer": "A",
+      "explanation": "Clarifying the meaning of missing values and choosing an appropriate handling strategy prevents misrepresentation in charts.",
+      "subskill": "handle_missing_values_consistently"
+    },
+    {
+      "question_id": "q4",
+      "question_text": "You notice 3 extreme outliers that compress the scale of your chart. What should you consider?",
+      "options": [
+        {"option_id": "A", "text": "Always remove outliers"},
+        {"option_id": "B", "text": "Investigate if they're errors or valid; consider transformation, separate visualization, or scale adjustment"},
+        {"option_id": "C", "text": "Outliers improve visualizations"},
+        {"option_id": "D", "text": "Change all outliers to the median value"}
+      ],
+      "correct_answer": "B",
+      "explanation": "Outliers affecting scale require investigation and thoughtful handling - they may be errors or important insights that need appropriate visualization.",
+      "subskill": "aggregate_and_normalize_metrics"
+    }
+  ]
+}
