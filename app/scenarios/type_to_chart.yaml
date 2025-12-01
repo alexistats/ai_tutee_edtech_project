@@ -27,6 +27,11 @@ student_config:
     misconceptions:
       - use_line_for_categories
       - default_to_pie_with_many_categories
+    # Behavioral descriptors
+    vocabulary_comfort: low
+    question_style: definitional
+    error_type: fundamental
+    learning_speed: slow
     release_answers_policy: withhold_solution
     tone: encouraging, concise, concrete
     turn_budget: 7
@@ -42,6 +47,11 @@ student_config:
       - fail_to_consider_category_count
       - overlook_dual_dimension_chart_options
       - ignore_data_granularity_effects
+    # Behavioral descriptors
+    vocabulary_comfort: moderate
+    question_style: application
+    error_type: application
+    learning_speed: moderate
     release_answers_policy: guided_steps
     tone: encouraging, concise, concrete
     turn_budget: 9
@@ -58,6 +68,11 @@ student_config:
       - create_overly_complex_single_charts
       - underuse_coordinated_views
       - ignore_streaming_data_constraints
+    # Behavioral descriptors
+    vocabulary_comfort: high
+    question_style: nuance
+    error_type: edge_cases
+    learning_speed: fast
     release_answers_policy: full_solution_ok
     tone: encouraging, analytical, nuanced
     turn_budget: 12

@@ -29,6 +29,11 @@ student_config:
       - plot_before_cleaning
       - aggregate_metrics_twice
       - ignore_outliers_affecting_scale
+    # Behavioral descriptors
+    vocabulary_comfort: low
+    question_style: definitional
+    error_type: fundamental
+    learning_speed: slow
     release_answers_policy: withhold_solution
     tone: encouraging, concise, concrete
     turn_budget: 7
@@ -44,6 +49,11 @@ student_config:
       - ignore_missing_temporal_data
       - fail_to_validate_merge_results
       - mishandle_outliers_without_investigation
+    # Behavioral descriptors
+    vocabulary_comfort: moderate
+    question_style: application
+    error_type: application
+    learning_speed: moderate
     release_answers_policy: guided_steps
     tone: encouraging, concise, concrete
     turn_budget: 9
@@ -60,6 +70,11 @@ student_config:
       - fail_to_align_different_data_grains
       - ignore_hierarchical_data_consistency
       - overlook_incremental_update_complexity
+    # Behavioral descriptors
+    vocabulary_comfort: high
+    question_style: nuance
+    error_type: edge_cases
+    learning_speed: fast
     release_answers_policy: full_solution_ok
     tone: encouraging, analytical, nuanced
     turn_budget: 12

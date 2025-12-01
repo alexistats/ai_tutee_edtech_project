@@ -268,7 +268,7 @@ def begin_teaching_on_question(question_index: int):
     question_data = st.session_state.pre_test_answers[question_index]
     st.session_state.selected_question_index = question_index
     st.session_state.session_phase = "teaching"
-
+    
     # Track where this question's conversation starts
     st.session_state.question_conversation_starts[question_index] = len(st.session_state.messages)
 
@@ -280,9 +280,35 @@ def begin_teaching_on_question(question_index: int):
     is_correct = question_data.get('is_correct', False)
     reasoning = question_data.get('reasoning', '')
     options = question_data.get('options', {})
+    
+    # Get knowledge level for level-appropriate behavior
+    knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
 
     # Store what topic we're working on
     st.session_state.current_teaching_topic = f"Question {q_num}: {q_text[:100]}..."
+
+    # Build level-specific behavior instructions
+    if knowledge_level == "beginner":
+        level_behavior = """
+REMEMBER: You are a BEGINNER student.
+- You struggle with technical terms. If the correct answer uses jargon you don't understand, ask "What does that word mean?"
+- Your confusion is FUNDAMENTAL - you don't grasp basic concepts yet
+- Ask DEFINITIONAL questions like "What does 'categorical' mean?" or "I don't understand this term"
+- Learning is SLOW for you - don't suddenly understand after one explanation"""
+    elif knowledge_level == "intermediate":
+        level_behavior = """
+REMEMBER: You are an INTERMEDIATE student.
+- You know the basic terms but sometimes mix them up
+- Your confusion is about APPLICATION - you know the concepts but struggle with when/how to apply them
+- Ask APPLICATION questions like "How do I know when to use this rule?" or "What makes this case different?"
+- You can grasp corrections with good concrete examples"""
+    else:  # advanced
+        level_behavior = """
+REMEMBER: You are an ADVANCED student.
+- You use terminology correctly and fluently
+- Your confusion is about EDGE CASES and NUANCES - you understand the main concept but miss subtle exceptions
+- Ask NUANCE questions like "What about when X and Y conflict?" or "Are there cases where this rule doesn't apply?"
+- You learn quickly and can extend insights to related situations"""
 
     # Build the AI student's opening based on whether they got it right or wrong
     if is_correct:
@@ -291,13 +317,14 @@ def begin_teaching_on_question(question_index: int):
 Question: {q_text}
 Your answer: {selected}) {options.get(selected, '')}
 Your reasoning was: {reasoning}
+{level_behavior}
 
 Your teacher has selected this question to discuss with you. Even though you got it right, you should:
-1. Explain your reasoning in more detail
-2. Ask if there are edge cases or nuances you might be missing
+1. Explain your reasoning in more detail (appropriate to your level)
+2. Ask ONE question appropriate to your level (definitional/application/nuance)
 3. Be open to deepening your understanding
 
-Start by briefly explaining why you chose your answer and ask ONE question to confirm your understanding or explore the topic further."""
+Start by briefly explaining why you chose your answer and ask ONE question appropriate to your {knowledge_level} level."""
     else:
         intro_prompt = f"""You just took a pre-test and got this question WRONG. Your teacher has selected this question to help you understand it better.
 
@@ -305,15 +332,16 @@ Question: {q_text}
 Your answer: {selected}) {options.get(selected, '')}
 The correct answer was: {correct}) {options.get(correct, '')}
 Your reasoning was: {reasoning}
+{level_behavior}
 
 You genuinely believed your answer was correct based on your misconceptions. Your teacher is here to help you understand where you went wrong. 
 
 Start by:
 1. Acknowledging you got this wrong
-2. Explaining the reasoning that led you to choose {selected}
-3. Asking ONE specific question to understand why {correct} is actually correct
+2. Explaining the reasoning that led you to choose {selected} (show confusion appropriate to your level)
+3. Asking ONE specific question appropriate to your {knowledge_level} level
 
-Be genuinely confused - you don't yet understand why your reasoning was flawed."""
+Be genuinely confused at your level - a beginner struggles with basic terms, intermediate struggles with application, advanced misses nuance."""
 
     model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
 
@@ -370,17 +398,17 @@ def send_teacher_message(teacher_input: str):
 def mark_question_complete():
     """Mark the current question as worked on, summarize learning, and return to question selection."""
     question_index = st.session_state.selected_question_index
-
+    
     if question_index is not None:
         st.session_state.questions_worked_on.add(question_index)
-
+        
         # Extract the conversation segment for this question
         start_idx = st.session_state.question_conversation_starts.get(question_index, 0)
         question_messages = st.session_state.messages[start_idx:]
-
+        
         # Get the original question data for context
         question_data = st.session_state.pre_test_answers[question_index]
-
+        
         # Summarize what was learned for THIS specific question
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
         try:
@@ -392,9 +420,8 @@ def mark_question_complete():
             st.session_state.question_learning_summaries[question_index] = learning_summary
         except Exception as e:
             # If summarization fails, store a placeholder
-            st.session_state.question_learning_summaries[
-                question_index] = f"Teaching session completed. (Summary unavailable: {e})"
-
+            st.session_state.question_learning_summaries[question_index] = f"Teaching session completed. (Summary unavailable: {e})"
+    
     st.session_state.selected_question_index = None
     st.session_state.current_teaching_topic = None
     st.session_state.session_phase = "pre_test_review"
@@ -693,7 +720,7 @@ def render_question_card(idx: int, qa: Dict):
                 selected = qa.get('selected_answer', '?')
                 correct = qa.get('correct_answer', '?')
                 st.caption(f"AI answered: **{selected}** | Correct: **{correct}**")
-
+            
             # Show learning summary if worked on
             if is_worked_on and idx in st.session_state.question_learning_summaries:
                 with st.expander("📚 What was learned"):
