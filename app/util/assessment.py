@@ -1,9 +1,10 @@
 """Assessment module for generating and evaluating pre/post tests for AI tutee.
 
 Uses multiple choice questions (MCQ) that can be programmatically graded.
+Key improvement: Per-question learning tracking with persistent misconceptions for untaught topics.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import os
 import json
 from openai import OpenAI
@@ -22,7 +23,8 @@ MCQ_ASSESSMENT = {
                 "D": "Ordinal data"
             },
             "correct_answer": "C",
-            "explanation": "ProductID is a categorical identifier (nominal data), not quantitative. Even though it uses numbers, it represents categories and should not be used in calculations."
+            "explanation": "ProductID is a categorical identifier (nominal data), not quantitative. Even though it uses numbers, it represents categories and should not be used in calculations.",
+            "related_misconceptions": ["treat_ids_as_numeric_values"]
         },
         {
             "question": "Survey responses range from 'Strongly Disagree' (1) to 'Strongly Agree' (5). What is the MOST important consideration when visualizing this data?",
@@ -33,7 +35,8 @@ MCQ_ASSESSMENT = {
                 "D": "It's discrete numerical data suitable for any calculation"
             },
             "correct_answer": "B",
-            "explanation": "Likert scale data is ordinal - it has a meaningful order, but the intervals between values aren't necessarily equal, so treat it differently than continuous numerical data."
+            "explanation": "Likert scale data is ordinal - it has a meaningful order, but the intervals between values aren't necessarily equal, so treat it differently than continuous numerical data.",
+            "related_misconceptions": ["assume_ordinal_behaves_like_continuous"]
         },
         {
             "question": "Which of the following is an example of continuous numerical data?",
@@ -44,7 +47,8 @@ MCQ_ASSESSMENT = {
                 "D": "Customer satisfaction rating (1-5 stars)"
             },
             "correct_answer": "B",
-            "explanation": "Temperature is continuous because it can take any value within a range. Employee count is discrete (can't have 50.5 employees), and the others are categorical."
+            "explanation": "Temperature is continuous because it can take any value within a range. Employee count is discrete (can't have 50.5 employees), and the others are categorical.",
+            "related_misconceptions": ["assume_ordinal_behaves_like_continuous"]
         },
         {
             "question": "You have a 'signup_date' column with values like '2024-01-15', '2024-02-20'. What type of data is this?",
@@ -55,7 +59,8 @@ MCQ_ASSESSMENT = {
                 "D": "Continuous numerical"
             },
             "correct_answer": "C",
-            "explanation": "Dates are temporal data - they have chronological order and are often used to show trends over time."
+            "explanation": "Dates are temporal data - they have chronological order and are often used to show trends over time.",
+            "related_misconceptions": ["ignore_temporal_formatting"]
         },
         {
             "question": "A dataset has department codes: 101=Sales, 102=Marketing, 103=Engineering. How should you treat these codes?",
@@ -66,7 +71,8 @@ MCQ_ASSESSMENT = {
                 "D": "As discrete numerical data for averaging"
             },
             "correct_answer": "B",
-            "explanation": "Department codes are nominal categorical identifiers. The numbers are just labels and shouldn't be used in calculations (averaging departments makes no sense)."
+            "explanation": "Department codes are nominal categorical identifiers. The numbers are just labels and shouldn't be used in calculations (averaging departments makes no sense).",
+            "related_misconceptions": ["treat_ids_as_numeric_values"]
         }
         ],
         "intermediate": [
@@ -79,7 +85,8 @@ MCQ_ASSESSMENT = {
                     "D": "customer_age is discrete numerical, age_group is nominal categorical"
                 },
                 "correct_answer": "B",
-                "explanation": "customer_age is continuous numerical (can take any value in range). age_group is ordinal categorical (ordered categories but not numeric). Understanding these differences is crucial for choosing appropriate visualizations."
+                "explanation": "customer_age is continuous numerical (can take any value in range). age_group is ordinal categorical (ordered categories but not numeric). Understanding these differences is crucial for choosing appropriate visualizations.",
+                "related_misconceptions": ["treat_rating_scales_inconsistently"]
             },
             {
                 "question": "ZIP codes (90210, 10001) appear numeric but should be treated as:",
@@ -90,7 +97,8 @@ MCQ_ASSESSMENT = {
                     "D": "Ordinal data with geographic ordering"
                 },
                 "correct_answer": "C",
-                "explanation": "ZIP codes are nominal categorical identifiers. While they appear numeric, performing arithmetic operations (averaging ZIP codes) is meaningless. They represent geographic regions as labels."
+                "explanation": "ZIP codes are nominal categorical identifiers. While they appear numeric, performing arithmetic operations (averaging ZIP codes) is meaningless. They represent geographic regions as labels.",
+                "related_misconceptions": ["confuse_zip_codes_as_numerical"]
             },
             {
                 "question": "You have 'satisfaction_score' (1-10 scale). When is it appropriate to treat this as continuous vs ordinal?",
@@ -101,7 +109,8 @@ MCQ_ASSESSMENT = {
                     "D": "Treat as nominal since numbers are just labels"
                 },
                 "correct_answer": "B",
-                "explanation": "Rating scales (especially 1-10) can be treated as continuous if you assume equal intervals between values. However, for visualizations, acknowledging the ordinal nature (discrete steps) often provides clearer communication."
+                "explanation": "Rating scales (especially 1-10) can be treated as continuous if you assume equal intervals between values. However, for visualizations, acknowledging the ordinal nature (discrete steps) often provides clearer communication.",
+                "related_misconceptions": ["treat_rating_scales_inconsistently"]
             },
             {
                 "question": "A 'revenue' column has values like '$1.5M', '$3.2M', '$850K'. What's the FIRST data quality issue?",
@@ -112,7 +121,8 @@ MCQ_ASSESSMENT = {
                     "D": "The data should be ordinal, not continuous"
                 },
                 "correct_answer": "B",
-                "explanation": "This is a data type casting issue. The values need to be parsed: convert 'M' to millions, 'K' to thousands, remove '$', then cast to numeric type. Only then can you perform calculations or create numerical visualizations."
+                "explanation": "This is a data type casting issue. The values need to be parsed: convert 'M' to millions, 'K' to thousands, remove '$', then cast to numeric type. Only then can you perform calculations or create numerical visualizations.",
+                "related_misconceptions": ["mishandle_mixed_unit_data"]
             },
             {
                 "question": "When dealing with timestamps ('2024-01-15 14:30:00'), you can extract multiple data types. Which is NOT a valid extraction?",
@@ -123,7 +133,8 @@ MCQ_ASSESSMENT = {
                     "D": "Timestamp average (continuous) for trend analysis"
                 },
                 "correct_answer": "D",
-                "explanation": "You cannot meaningfully average timestamps. You can extract components (date, hour, day) or calculate durations, but averaging timestamps directly is statistically invalid. Each extracted component has its own data type."
+                "explanation": "You cannot meaningfully average timestamps. You can extract components (date, hour, day) or calculate durations, but averaging timestamps directly is statistically invalid. Each extracted component has its own data type.",
+                "related_misconceptions": ["recognize_data_type_casting_issues"]
             }
         ],
         "advanced": [
@@ -136,7 +147,8 @@ MCQ_ASSESSMENT = {
                     "D": "Skew doesn't affect data type, only visualization aesthetics"
                 },
                 "correct_answer": "B",
-                "explanation": "Data type is inherent to the variable, not its distribution. However, extreme skew in continuous data may warrant transformation (log scale) or binning into ordinal categories (income brackets) for better visualization and interpretation."
+                "explanation": "Data type is inherent to the variable, not its distribution. However, extreme skew in continuous data may warrant transformation (log scale) or binning into ordinal categories (income brackets) for better visualization and interpretation.",
+                "related_misconceptions": ["overlook_distribution_impact_on_type_choice"]
             },
             {
                 "question": "A dataset has 'education_years' (12, 14, 16, 18) and 'education_level' (High School, Associate, Bachelor, Graduate). Which statement is most accurate?",
@@ -147,7 +159,8 @@ MCQ_ASSESSMENT = {
                     "D": "education_years is ordinal, education_level is nominal - no relationship"
                 },
                 "correct_answer": "C",
-                "explanation": "education_years is discrete numerical (ratio scale: 16 years is truly twice 8 years). education_level is ordinal (ordered but unequal intervals: Bachelor to Graduate ≠ High School to Associate). They encode the same concept with different properties."
+                "explanation": "education_years is discrete numerical (ratio scale: 16 years is truly twice 8 years). education_level is ordinal (ordered but unequal intervals: Bachelor to Graduate ≠ High School to Associate). They encode the same concept with different properties.",
+                "related_misconceptions": ["miss_ratio_vs_interval_scale_distinctions"]
             },
             {
                 "question": "When is it appropriate to convert continuous data (temperature: 72.3°F) to ordinal categories (Cold, Mild, Hot)?",
@@ -158,7 +171,8 @@ MCQ_ASSESSMENT = {
                     "D": "Only when you have missing data"
                 },
                 "correct_answer": "B",
-                "explanation": "Binning continuous to ordinal is a trade-off: you lose precision but gain interpretability. It's appropriate when categorical decisions are needed (Cold→wear jacket) or when precise values add noise rather than insight. Context determines the right choice."
+                "explanation": "Binning continuous to ordinal is a trade-off: you lose precision but gain interpretability. It's appropriate when categorical decisions are needed (Cold→wear jacket) or when precise values add noise rather than insight. Context determines the right choice.",
+                "related_misconceptions": ["ignore_context_in_continuous_to_categorical_conversion"]
             },
             {
                 "question": "You have 'response_time' in milliseconds with bimodal distribution (fast automated responses ~100ms, slow human responses ~5000ms). How should you handle this for visualization?",
@@ -169,7 +183,8 @@ MCQ_ASSESSMENT = {
                     "D": "Either A or B depending on analytical goal - both preserve important information"
                 },
                 "correct_answer": "D",
-                "explanation": "This is a nuanced decision. If analyzing distribution patterns, continuous histogram (possibly with log scale) works. If the goal is comparing process types, categorical split is clearer. Advanced practitioners choose based on the analytical question, not rigid rules."
+                "explanation": "This is a nuanced decision. If analyzing distribution patterns, continuous histogram (possibly with log scale) works. If the goal is comparing process types, categorical split is clearer. Advanced practitioners choose based on the analytical question, not rigid rules.",
+                "related_misconceptions": ["overlook_distribution_impact_on_type_choice"]
             },
             {
                 "question": "A 'priority' field uses values 'P0', 'P1', 'P2', 'P3' where P0=critical, P3=low. What's the most sophisticated handling?",
@@ -180,7 +195,8 @@ MCQ_ASSESSMENT = {
                     "D": "Binary categorical (Critical vs Non-Critical)"
                 },
                 "correct_answer": "B",
-                "explanation": "Priority is ordinal with specific ordering. Keep as ordinal categorical but define explicit sort order for visualizations. Converting to numerical (option C) implies equal intervals which is false. Maintaining ordinal type with proper ordering preserves semantic meaning while enabling correct sorting."
+                "explanation": "Priority is ordinal with specific ordering. Keep as ordinal categorical but define explicit sort order for visualizations. Converting to numerical (option C) implies equal intervals which is false. Maintaining ordinal type with proper ordering preserves semantic meaning while enabling correct sorting.",
+                "related_misconceptions": ["miss_ratio_vs_interval_scale_distinctions"]
             }
         ]
     },
@@ -195,7 +211,8 @@ MCQ_ASSESSMENT = {
                 "D": "Pie chart"
             },
             "correct_answer": "C",
-            "explanation": "Bar/column charts are ideal for comparing numerical values across discrete categories. Each category gets its own bar, making comparison easy."
+            "explanation": "Bar/column charts are ideal for comparing numerical values across discrete categories. Each category gets its own bar, making comparison easy.",
+            "related_misconceptions": ["use_line_for_categories"]
         },
         {
             "question": "When is a line chart preferred over a bar chart?",
@@ -206,7 +223,8 @@ MCQ_ASSESSMENT = {
                 "D": "When displaying the relationship between two numerical variables"
             },
             "correct_answer": "B",
-            "explanation": "Line charts are best for temporal data or continuous data where the connection between points is meaningful, showing trends and patterns."
+            "explanation": "Line charts are best for temporal data or continuous data where the connection between points is meaningful, showing trends and patterns.",
+            "related_misconceptions": ["use_line_for_categories"]
         },
         {
             "question": "You have two numerical variables: employee age and salary. Which chart type would best show their relationship?",
@@ -217,7 +235,8 @@ MCQ_ASSESSMENT = {
                 "D": "Scatter plot"
             },
             "correct_answer": "D",
-            "explanation": "Scatter plots are designed to show relationships between two numerical variables and can reveal correlations or patterns."
+            "explanation": "Scatter plots are designed to show relationships between two numerical variables and can reveal correlations or patterns.",
+            "related_misconceptions": ["ignore_aggregation_needs"]
         },
         {
             "question": "A pie chart is most appropriate when you want to:",
@@ -228,7 +247,8 @@ MCQ_ASSESSMENT = {
                 "D": "Show correlation between variables"
             },
             "correct_answer": "C",
-            "explanation": "Pie charts show composition - how parts make up a whole. They work best with few categories (3-7) to show proportions."
+            "explanation": "Pie charts show composition - how parts make up a whole. They work best with few categories (3-7) to show proportions.",
+            "related_misconceptions": ["default_to_pie_with_many_categories"]
         },
         {
             "question": "You have monthly sales data for 12 months. Which chart would be LEAST appropriate?",
@@ -239,7 +259,8 @@ MCQ_ASSESSMENT = {
                 "D": "Area chart showing cumulative sales"
             },
             "correct_answer": "C",
-            "explanation": "A pie chart is least appropriate because months don't represent parts of a whole - they're sequential time periods better shown with line or bar charts."
+            "explanation": "A pie chart is least appropriate because months don't represent parts of a whole - they're sequential time periods better shown with line or bar charts.",
+            "related_misconceptions": ["default_to_pie_with_many_categories", "use_line_for_categories"]
         }
         ],
         "intermediate": [
@@ -252,7 +273,8 @@ MCQ_ASSESSMENT = {
                     "D": "Either A or B depending on whether trend or comparison is more important"
                 },
                 "correct_answer": "D",
-                "explanation": "Multi-line chart emphasizes trends and makes time-based patterns clear. Grouped bar chart emphasizes categorical comparison at each time point. The choice depends on your analytical priority - both are valid for different insights."
+                "explanation": "Multi-line chart emphasizes trends and makes time-based patterns clear. Grouped bar chart emphasizes categorical comparison at each time point. The choice depends on your analytical priority - both are valid for different insights.",
+                "related_misconceptions": ["overlook_dual_dimension_chart_options"]
             },
             {
                 "question": "When would you choose a heatmap over a scatter plot for numerical data?",
@@ -263,7 +285,8 @@ MCQ_ASSESSMENT = {
                     "D": "When you have less than 10 data points"
                 },
                 "correct_answer": "B",
-                "explanation": "Heatmaps excel when you have grid-structured data (like time x category) with a third numerical variable encoded as color. Scatter plots work for 2D relationships. Each serves different purposes based on data structure."
+                "explanation": "Heatmaps excel when you have grid-structured data (like time x category) with a third numerical variable encoded as color. Scatter plots work for 2D relationships. Each serves different purposes based on data structure.",
+                "related_misconceptions": ["select_charts_for_multiple_dimensions"]
             },
             {
                 "question": "Your data includes 'country' (categorical) and 'population' (numerical). What additional context determines chart choice?",
@@ -274,7 +297,8 @@ MCQ_ASSESSMENT = {
                     "D": "Always use pie chart for population data"
                 },
                 "correct_answer": "B",
-                "explanation": "Data type alone doesn't determine chart choice. Consider: How many categories? (too many for bar chart?), Is geography important? (use map), Is hierarchy present? (treemap). Context and analytical goal matter as much as data type."
+                "explanation": "Data type alone doesn't determine chart choice. Consider: How many categories? (too many for bar chart?), Is geography important? (use map), Is hierarchy present? (treemap). Context and analytical goal matter as much as data type.",
+                "related_misconceptions": ["fail_to_consider_category_count"]
             },
             {
                 "question": "For showing correlation between 10+ numerical variables simultaneously, which is most effective?",
@@ -285,7 +309,8 @@ MCQ_ASSESSMENT = {
                     "D": "Stacked bar chart"
                 },
                 "correct_answer": "B",
-                "explanation": "Correlation matrix heatmap efficiently shows pairwise relationships between many numerical variables using color encoding. Scatter plot matrix is an alternative, but heatmap is more compact for identifying correlation patterns quickly."
+                "explanation": "Correlation matrix heatmap efficiently shows pairwise relationships between many numerical variables using color encoding. Scatter plot matrix is an alternative, but heatmap is more compact for identifying correlation patterns quickly.",
+                "related_misconceptions": ["overlook_dual_dimension_chart_options"]
             },
             {
                 "question": "You have temporal data at different granularities (hourly, daily, monthly). How does this affect chart choice?",
@@ -296,7 +321,8 @@ MCQ_ASSESSMENT = {
                     "D": "Temporal data always requires area charts"
                 },
                 "correct_answer": "C",
-                "explanation": "Granularity affects visual density and analytical focus. High frequency (hourly) works best as line to show continuous flow. Lower frequency (monthly) can use bars if emphasizing discrete comparisons, or lines if emphasizing trend. Match chart to analytical goal and data density."
+                "explanation": "Granularity affects visual density and analytical focus. High frequency (hourly) works best as line to show continuous flow. Lower frequency (monthly) can use bars if emphasizing discrete comparisons, or lines if emphasizing trend. Match chart to analytical goal and data density.",
+                "related_misconceptions": ["ignore_data_granularity_effects"]
             }
         ],
         "advanced": [
@@ -309,7 +335,8 @@ MCQ_ASSESSMENT = {
                     "D": "Single 3D bar chart"
                 },
                 "correct_answer": "C",
-                "explanation": "Advanced visualization handles high dimensionality through coordination and faceting, not cramming into one chart. Small multiples, coordinated views, and thoughtful encoding (color, size) are more effective than complex single charts. Option B overloads a single chart."
+                "explanation": "Advanced visualization handles high dimensionality through coordination and faceting, not cramming into one chart. Small multiples, coordinated views, and thoughtful encoding (color, size) are more effective than complex single charts. Option B overloads a single chart.",
+                "related_misconceptions": ["create_overly_complex_single_charts"]
             },
             {
                 "question": "When is a violin plot preferred over a box plot for distribution visualization?",
@@ -320,7 +347,8 @@ MCQ_ASSESSMENT = {
                     "D": "When you have less than 10 data points"
                 },
                 "correct_answer": "B",
-                "explanation": "Violin plots show the full probability density function, revealing bimodality and distribution shape that box plots hide. Box plots show quartiles concisely. Choose violin when distribution shape matters, box plot for quick quartile comparison."
+                "explanation": "Violin plots show the full probability density function, revealing bimodality and distribution shape that box plots hide. Box plots show quartiles concisely. Choose violin when distribution shape matters, box plot for quick quartile comparison.",
+                "related_misconceptions": ["choose_specialized_chart_types"]
             },
             {
                 "question": "You're visualizing hierarchical data (Company → Department → Team → Individual). Which chart type is LEAST appropriate?",
@@ -331,7 +359,8 @@ MCQ_ASSESSMENT = {
                     "D": "Hierarchical edge bundling or dendrogram"
                 },
                 "correct_answer": "C",
-                "explanation": "Scatter plots show relationships between two continuous variables, not hierarchy. Treemaps, sunbursts, and dendrograms are specifically designed for hierarchical data, using nesting or tree structures to encode parent-child relationships."
+                "explanation": "Scatter plots show relationships between two continuous variables, not hierarchy. Treemaps, sunbursts, and dendrograms are specifically designed for hierarchical data, using nesting or tree structures to encode parent-child relationships.",
+                "related_misconceptions": ["handle_high_dimensional_data"]
             },
             {
                 "question": "For real-time streaming data (stock prices updating every second), what chart design consideration is most critical?",
@@ -342,7 +371,8 @@ MCQ_ASSESSMENT = {
                     "D": "Always show all historical data"
                 },
                 "correct_answer": "B",
-                "explanation": "Streaming data requires careful temporal window management: sliding windows (last N minutes), aggregation (1-minute averages), or zoom/pan controls. Showing all data causes clutter; dropping context loses trends. Advanced streaming viz balances real-time updates with historical context."
+                "explanation": "Streaming data requires careful temporal window management: sliding windows (last N minutes), aggregation (1-minute averages), or zoom/pan controls. Showing all data causes clutter; dropping context loses trends. Advanced streaming viz balances real-time updates with historical context.",
+                "related_misconceptions": ["ignore_streaming_data_constraints"]
             },
             {
                 "question": "You have highly skewed data (power law distribution) and want to show both overall pattern and detail. Best approach?",
@@ -353,7 +383,8 @@ MCQ_ASSESSMENT = {
                     "D": "Remove outliers to force normal distribution"
                 },
                 "correct_answer": "C",
-                "explanation": "Power law data (wealth, city sizes, word frequency) spans many orders of magnitude. Log scale reveals overall pattern but obscures small values. Linear scale shows detail but compresses most data. Advanced approach: use both views or log-scale with interactive detail-on-demand. Never remove outliers (option D) - they ARE the pattern in power law data."
+                "explanation": "Power law data (wealth, city sizes, word frequency) spans many orders of magnitude. Log scale reveals overall pattern but obscures small values. Linear scale shows detail but compresses most data. Advanced approach: use both views or log-scale with interactive detail-on-demand. Never remove outliers (option D) - they ARE the pattern in power law data.",
+                "related_misconceptions": ["underuse_coordinated_views"]
             }
         ]
     },
@@ -368,7 +399,8 @@ MCQ_ASSESSMENT = {
                 "D": "Scatter plot"
             },
             "correct_answer": "C",
-            "explanation": "Line charts are ideal for trend analysis over time. They clearly show how values change and make patterns like growth or seasonality visible."
+            "explanation": "Line charts are ideal for trend analysis over time. They clearly show how values change and make patterns like growth or seasonality visible.",
+            "related_misconceptions": ["confuse_rank_with_trend"]
         },
         {
             "question": "You need to 'compare market share among 5 competitors'. Which chart best supports this task?",
@@ -379,7 +411,8 @@ MCQ_ASSESSMENT = {
                 "D": "Histogram"
             },
             "correct_answer": "C",
-            "explanation": "Market share is about composition (parts of a whole). Pie charts or 100% stacked bar charts effectively show how the total market is divided."
+            "explanation": "Market share is about composition (parts of a whole). Pie charts or 100% stacked bar charts effectively show how the total market is divided.",
+            "related_misconceptions": ["assume_one_chart_fits_all_tasks"]
         },
         {
             "question": "The task is to 'understand the distribution of test scores in a class'. Which chart is most appropriate?",
@@ -390,7 +423,8 @@ MCQ_ASSESSMENT = {
                 "D": "Scatter plot"
             },
             "correct_answer": "C",
-            "explanation": "Histograms show distributions of continuous data by grouping values into bins. Box plots also show distribution with quartiles and outliers."
+            "explanation": "Histograms show distributions of continuous data by grouping values into bins. Box plots also show distribution with quartiles and outliers.",
+            "related_misconceptions": ["ignore_distribution_needs"]
         },
         {
             "question": "Your task is to 'find the correlation between advertising spend and sales revenue'. Best visualization?",
@@ -401,7 +435,8 @@ MCQ_ASSESSMENT = {
                 "D": "Multiple line charts"
             },
             "correct_answer": "B",
-            "explanation": "Scatter plots are designed to show relationships between two numerical variables. A trendline can confirm correlation strength."
+            "explanation": "Scatter plots are designed to show relationships between two numerical variables. A trendline can confirm correlation strength.",
+            "related_misconceptions": ["assume_one_chart_fits_all_tasks"]
         },
         {
             "question": "You need to 'show how budget is allocated across 8 departments'. Which task is this, and which chart fits best?",
@@ -412,7 +447,8 @@ MCQ_ASSESSMENT = {
                 "D": "Distribution - use histogram"
             },
             "correct_answer": "B",
-            "explanation": "Budget allocation across departments is a comparison task. Bar charts excel at comparing values across multiple categories."
+            "explanation": "Budget allocation across departments is a comparison task. Bar charts excel at comparing values across multiple categories.",
+            "related_misconceptions": ["confuse_rank_with_trend"]
         }
         ],
         "intermediate": [
@@ -425,7 +461,8 @@ MCQ_ASSESSMENT = {
                     "D": "Stacked bar chart"
                 },
                 "correct_answer": "B",
-                "explanation": "Outlier identification requires showing distribution and boundaries. Box plots display quartiles and outliers explicitly. Scatter plots with statistical boundaries (standard deviation or IQR lines) also highlight unusual points effectively."
+                "explanation": "Outlier identification requires showing distribution and boundaries. Box plots display quartiles and outliers explicitly. Scatter plots with statistical boundaries (standard deviation or IQR lines) also highlight unusual points effectively.",
+                "related_misconceptions": ["overlook_outlier_identification_needs"]
             },
             {
                 "question": "You need to 'compare actual vs. target sales across 10 product lines'. What chart handles this comparison task best?",
@@ -436,7 +473,8 @@ MCQ_ASSESSMENT = {
                     "D": "Histogram"
                 },
                 "correct_answer": "A",
-                "explanation": "Comparing actual vs. target requires showing both values per category. Bullet charts are designed for this (showing actual, target, and quality ranges). Grouped bar charts also work well, with bars grouped by product showing actual vs. target side-by-side."
+                "explanation": "Comparing actual vs. target requires showing both values per category. Bullet charts are designed for this (showing actual, target, and quality ranges). Grouped bar charts also work well, with bars grouped by product showing actual vs. target side-by-side.",
+                "related_misconceptions": ["fail_to_plan_for_drill_down_requirements"]
             },
             {
                 "question": "The task is 'understand customer journey through 5 sequential steps with dropout rates'. Which visualization fits best?",
@@ -447,7 +485,8 @@ MCQ_ASSESSMENT = {
                     "D": "Box plot"
                 },
                 "correct_answer": "B",
-                "explanation": "Sequential flow with dropout requires funnel charts (showing narrowing at each stage) or Sankey diagrams (showing flow quantities between stages). Both are purpose-built for conversion/journey analysis."
+                "explanation": "Sequential flow with dropout requires funnel charts (showing narrowing at each stage) or Sankey diagrams (showing flow quantities between stages). Both are purpose-built for conversion/journey analysis.",
+                "related_misconceptions": ["ignore_sequential_flow_visualizations"]
             },
             {
                 "question": "Your task is 'explore relationships between multiple variables to generate hypotheses'. Best approach?",
@@ -458,7 +497,8 @@ MCQ_ASSESSMENT = {
                     "D": "Single line chart"
                 },
                 "correct_answer": "B",
-                "explanation": "Exploratory analysis of multiple variables requires multivariate visualization. Scatter plot matrix shows all pairwise relationships. Parallel coordinates show patterns across many dimensions. Both support hypothesis generation through pattern discovery."
+                "explanation": "Exploratory analysis of multiple variables requires multivariate visualization. Scatter plot matrix shows all pairwise relationships. Parallel coordinates show patterns across many dimensions. Both support hypothesis generation through pattern discovery.",
+                "related_misconceptions": ["choose_charts_for_exploratory_analysis"]
             },
             {
                 "question": "The task is 'track progress toward annual goal over time with context of previous years'. Which chart provides best context?",
@@ -469,7 +509,8 @@ MCQ_ASSESSMENT = {
                     "D": "Histogram"
                 },
                 "correct_answer": "B",
-                "explanation": "Progress tracking requires temporal context. Showing current year prominently with previous years as reference (lighter lines or shaded range) enables comparison to historical patterns and realistic goal assessment."
+                "explanation": "Progress tracking requires temporal context. Showing current year prominently with previous years as reference (lighter lines or shaded range) enables comparison to historical patterns and realistic goal assessment.",
+                "related_misconceptions": ["confuse_rank_with_trend"]
             }
         ],
         "advanced": [
@@ -482,7 +523,8 @@ MCQ_ASSESSMENT = {
                     "D": "Histogram of Q3 transactions"
                 },
                 "correct_answer": "B",
-                "explanation": "Diagnostic questions (Why?) require multi-level analysis. Start with trend confirmation (line chart), decompose by dimensions (which region/product dropped?), and correlate with external factors (seasonality, competition, economy). One chart can't answer 'why' - you need analytical depth."
+                "explanation": "Diagnostic questions (Why?) require multi-level analysis. Start with trend confirmation (line chart), decompose by dimensions (which region/product dropped?), and correlate with external factors (seasonality, competition, economy). One chart can't answer 'why' - you need analytical depth.",
+                "related_misconceptions": ["design_diagnostic_analysis_workflows"]
             },
             {
                 "question": "The task is 'enable users to explore data themselves and answer their own questions'. What approach is most appropriate?",
@@ -493,7 +535,8 @@ MCQ_ASSESSMENT = {
                     "D": "Pie chart"
                 },
                 "correct_answer": "B",
-                "explanation": "Self-service exploration requires interactivity: filters (select subsets), drill-down (see details), linked views (selections propagate). Static charts answer pre-defined questions; interactive dashboards empower users to ask their own questions and discover insights."
+                "explanation": "Self-service exploration requires interactivity: filters (select subsets), drill-down (see details), linked views (selections propagate). Static charts answer pre-defined questions; interactive dashboards empower users to ask their own questions and discover insights.",
+                "related_misconceptions": ["fail_to_enable_self_service_exploration"]
             },
             {
                 "question": "You're visualizing A/B test results. The task is 'determine if the difference is statistically significant'. What must your visualization include?",
@@ -504,7 +547,8 @@ MCQ_ASSESSMENT = {
                     "D": "Line chart"
                 },
                 "correct_answer": "B",
-                "explanation": "Statistical significance requires showing uncertainty. Display means with confidence intervals (error bars), note sample sizes (affects CI width), and include statistical test results (p-value, effect size). Bar chart without uncertainty is incomplete - overlapping CIs suggest no significant difference."
+                "explanation": "Statistical significance requires showing uncertainty. Display means with confidence intervals (error bars), note sample sizes (affects CI width), and include statistical test results (p-value, effect size). Bar chart without uncertainty is incomplete - overlapping CIs suggest no significant difference.",
+                "related_misconceptions": ["provide_insufficient_statistical_context"]
             },
             {
                 "question": "Task: 'Identify which factors most influence customer churn.' What analytical visualization is most appropriate?",
@@ -515,7 +559,8 @@ MCQ_ASSESSMENT = {
                     "D": "Single scatter plot"
                 },
                 "correct_answer": "B",
-                "explanation": "Identifying drivers requires statistical analysis, not just description. Build a predictive model (logistic regression, random forest), visualize feature importance (which factors matter most), then show how those factors distribute differently for churned vs. retained customers. This combines machine learning with explanatory visualization."
+                "explanation": "Identifying drivers requires statistical analysis, not just description. Build a predictive model (logistic regression, random forest), visualize feature importance (which factors matter most), then show how those factors distribute differently for churned vs. retained customers. This combines machine learning with explanatory visualization.",
+                "related_misconceptions": ["design_diagnostic_analysis_workflows"]
             },
             {
                 "question": "Your task involves multiple audiences: executives (high-level), analysts (detailed). Best approach?",
@@ -526,7 +571,8 @@ MCQ_ASSESSMENT = {
                     "D": "Only show high-level - analysts can request details separately"
                 },
                 "correct_answer": "B",
-                "explanation": "Different audiences have different analytical needs. Advanced practice: create layered deliverables (executive dashboard → analyst workbooks) or progressive disclosure (summary → drill-down). One-size-fits-all satisfies no one. Tailor depth and detail to audience analytical sophistication and decision needs."
+                "explanation": "Different audiences have different analytical needs. Advanced practice: create layered deliverables (executive dashboard → analyst workbooks) or progressive disclosure (summary → drill-down). One-size-fits-all satisfies no one. Tailor depth and detail to audience analytical sophistication and decision needs.",
+                "related_misconceptions": ["ignore_multi_audience_requirements"]
             }
         ]
     },
@@ -541,7 +587,8 @@ MCQ_ASSESSMENT = {
                 "D": "Convert them all to categorical data"
             },
             "correct_answer": "B",
-            "explanation": "Standardizing date formats is critical for proper sorting and time-based analysis. Inconsistent formats will cause errors in temporal visualizations."
+            "explanation": "Standardizing date formats is critical for proper sorting and time-based analysis. Inconsistent formats will cause errors in temporal visualizations.",
+            "related_misconceptions": ["plot_before_cleaning"]
         },
         {
             "question": "You have a revenue column with 15% missing values. Which approach is LEAST appropriate?",
@@ -552,7 +599,8 @@ MCQ_ASSESSMENT = {
                 "D": "Mark missing values as a separate category if missingness is meaningful"
             },
             "correct_answer": "C",
-            "explanation": "Replacing missing values with zero is dangerous because it assumes zero revenue, which may not be true. Zero is a meaningful value, not 'missing'."
+            "explanation": "Replacing missing values with zero is dangerous because it assumes zero revenue, which may not be true. Zero is a meaningful value, not 'missing'.",
+            "related_misconceptions": ["plot_before_cleaning"]
         },
         {
             "question": "Your data has one row per transaction (1000 rows). You want a bar chart of monthly sales. What data preparation is needed?",
@@ -563,7 +611,8 @@ MCQ_ASSESSMENT = {
                 "D": "Convert all dates to categorical months"
             },
             "correct_answer": "B",
-            "explanation": "You need to aggregate (group) transaction-level data by month and sum the sales to get monthly totals suitable for visualization."
+            "explanation": "You need to aggregate (group) transaction-level data by month and sum the sales to get monthly totals suitable for visualization.",
+            "related_misconceptions": ["aggregate_metrics_twice"]
         },
         {
             "question": "You notice extreme outliers in your salary data (e.g., CEO salary is 50x the median). Before visualizing, you should:",
@@ -574,7 +623,8 @@ MCQ_ASSESSMENT = {
                 "D": "Ignore them; they won't affect the visualization"
             },
             "correct_answer": "B",
-            "explanation": "Outliers could be data errors OR legitimate extreme values (like CEO salary). Investigate first - don't automatically remove or modify without understanding why they exist."
+            "explanation": "Outliers could be data errors OR legitimate extreme values (like CEO salary). Investigate first - don't automatically remove or modify without understanding why they exist.",
+            "related_misconceptions": ["ignore_outliers_affecting_scale"]
         },
         {
             "question": "Your dataset has a 'price' column stored as text: '$1,234.56'. Before creating a histogram, you need to:",
@@ -585,7 +635,8 @@ MCQ_ASSESSMENT = {
                 "D": "Delete the column and recreate it"
             },
             "correct_answer": "C",
-            "explanation": "Text-formatted numbers must be cleaned (remove currency symbols, commas) and type-cast to numeric for mathematical operations and proper visualization."
+            "explanation": "Text-formatted numbers must be cleaned (remove currency symbols, commas) and type-cast to numeric for mathematical operations and proper visualization.",
+            "related_misconceptions": ["mix_units_without_standardizing"]
         }
         ],
         "intermediate": [
@@ -598,7 +649,8 @@ MCQ_ASSESSMENT = {
                     "D": "Replace all dates with categories"
                 },
                 "correct_answer": "B",
-                "explanation": "Missing dates in time series can be misleading. Generate a complete date sequence and fill missing days appropriately: $0 sales if no transactions is valid, or mark as 'No Data' if absence indicates data quality issue. Choice depends on domain meaning."
+                "explanation": "Missing dates in time series can be misleading. Generate a complete date sequence and fill missing days appropriately: $0 sales if no transactions is valid, or mark as 'No Data' if absence indicates data quality issue. Choice depends on domain meaning.",
+                "related_misconceptions": ["ignore_missing_temporal_data"]
             },
             {
                 "question": "Your dataset has a 'comments' text field. Before visualization, what preparation is needed to extract insights?",
@@ -609,7 +661,8 @@ MCQ_ASSESSMENT = {
                     "D": "Convert all text to numbers"
                 },
                 "correct_answer": "B",
-                "explanation": "Raw text requires feature extraction for visualization. Derive metrics: comment length distribution, sentiment scores, topic categories (NLP), keyword frequency (word clouds). Visualize these derived numerical or categorical features, not raw text."
+                "explanation": "Raw text requires feature extraction for visualization. Derive metrics: comment length distribution, sentiment scores, topic categories (NLP), keyword frequency (word clouds). Visualize these derived numerical or categorical features, not raw text.",
+                "related_misconceptions": ["handle_text_feature_extraction"]
             },
             {
                 "question": "You're merging two datasets on 'customer_id'. One has 1000 rows, the other 800. After inner join you get 600 rows. What happened?",
@@ -620,7 +673,8 @@ MCQ_ASSESSMENT = {
                     "D": "Delete all unmatched rows without investigation"
                 },
                 "correct_answer": "B",
-                "explanation": "Lost rows during join indicate non-overlapping IDs. This could be valid (customers only in one system) or a problem (ID format differences, typos). Always investigate merge statistics. Consider left/right/outer joins if you need to preserve unmatched records and understand coverage."
+                "explanation": "Lost rows during join indicate non-overlapping IDs. This could be valid (customers only in one system) or a problem (ID format differences, typos). Always investigate merge statistics. Consider left/right/outer joins if you need to preserve unmatched records and understand coverage.",
+                "related_misconceptions": ["fail_to_validate_merge_results"]
             },
             {
                 "question": "Your sales data has extreme outliers (one $10M order among typical $100 orders). How do you prepare for visualization?",
@@ -631,7 +685,8 @@ MCQ_ASSESSMENT = {
                     "D": "Replace outliers with mean"
                 },
                 "correct_answer": "B",
-                "explanation": "Outlier handling is context-dependent. First verify if outlier is error or real. Then choose strategy based on analytical goal: log scale (show all data), winsorization (cap extreme values), separate outlier analysis, or filter with explanation. Never blindly remove - outliers often contain important information."
+                "explanation": "Outlier handling is context-dependent. First verify if outlier is error or real. Then choose strategy based on analytical goal: log scale (show all data), winsorization (cap extreme values), separate outlier analysis, or filter with explanation. Never blindly remove - outliers often contain important information.",
+                "related_misconceptions": ["mishandle_outliers_without_investigation"]
             },
             {
                 "question": "You have 'age' field with invalid values (120, -5, NULL). What's the proper cleaning sequence?",
@@ -642,7 +697,8 @@ MCQ_ASSESSMENT = {
                     "D": "Ignore - visualization tools will handle it"
                 },
                 "correct_answer": "B",
-                "explanation": "Data cleaning is systematic: identify invalid values using domain rules (age range), understand why they exist (entry errors? system bugs?), then choose appropriate action (remove, impute, or flag). Track data quality issues - they often reveal systematic problems."
+                "explanation": "Data cleaning is systematic: identify invalid values using domain rules (age range), understand why they exist (entry errors? system bugs?), then choose appropriate action (remove, impute, or flag). Track data quality issues - they often reveal systematic problems.",
+                "related_misconceptions": ["plot_before_cleaning"]
             }
         ],
         "advanced": [
@@ -655,7 +711,8 @@ MCQ_ASSESSMENT = {
                     "D": "Delete the mismatched data"
                 },
                 "correct_answer": "B",
-                "explanation": "Mixed grain requires careful alignment. Decide target grain based on analytical need (daily for operational, monthly for strategy). Aggregate properly: sum additive metrics (sales), average intensive metrics (profit margin), carry forward periodic values (annual targets). Use SQL window functions or pandas resample for sophisticated alignment."
+                "explanation": "Mixed grain requires careful alignment. Decide target grain based on analytical need (daily for operational, monthly for strategy). Aggregate properly: sum additive metrics (sales), average intensive metrics (profit margin), carry forward periodic values (annual targets). Use SQL window functions or pandas resample for sophisticated alignment.",
+                "related_misconceptions": ["fail_to_align_different_data_grains"]
             },
             {
                 "question": "Your dataset has hierarchical location data (Country > State > City) with inconsistencies (some cities without states). How do you prepare for geographic visualization?",
@@ -666,7 +723,8 @@ MCQ_ASSESSMENT = {
                     "D": "Convert everything to country level only"
                 },
                 "correct_answer": "B",
-                "explanation": "Geographic hierarchy requires validation and enrichment. Check consistency (does 'Springfield, MA' match 'Massachusetts, USA'?), use geocoding services to fill gaps, standardize names ('NYC' → 'New York City'), prepare data at multiple aggregation levels for drill-down, and document data quality assumptions. Advanced geo-viz depends on clean hierarchies."
+                "explanation": "Geographic hierarchy requires validation and enrichment. Check consistency (does 'Springfield, MA' match 'Massachusetts, USA'?), use geocoding services to fill gaps, standardize names ('NYC' → 'New York City'), prepare data at multiple aggregation levels for drill-down, and document data quality assumptions. Advanced geo-viz depends on clean hierarchies.",
+                "related_misconceptions": ["ignore_hierarchical_data_consistency"]
             },
             {
                 "question": "You're preparing time series data with known seasonal patterns and structural breaks (policy changes). What advanced preparation enables better visualization?",
@@ -677,7 +735,8 @@ MCQ_ASSESSMENT = {
                     "D": "Remove all seasonal patterns"
                 },
                 "correct_answer": "B",
-                "explanation": "Advanced time series prep involves decomposition to separate components, marking structural breaks (policy changes, COVID-19) with annotations, calculating YoY changes to factor out seasonality, and providing both raw and adjusted views. This preparation enables audiences to see true trends versus seasonal noise."
+                "explanation": "Advanced time series prep involves decomposition to separate components, marking structural breaks (policy changes, COVID-19) with annotations, calculating YoY changes to factor out seasonality, and providing both raw and adjusted views. This preparation enables audiences to see true trends versus seasonal noise.",
+                "related_misconceptions": ["align_multi_grain_data_sources"]
             },
             {
                 "question": "You're building a dashboard that must handle incrementally arriving data. What preparation approach is most robust?",
@@ -688,7 +747,8 @@ MCQ_ASSESSMENT = {
                     "D": "Don't handle updates"
                 },
                 "correct_answer": "B",
-                "explanation": "Production dashboards require incremental data pipelines: use CDC to identify changes, handle late arrivals (sales processed days later), track slowly changing dimensions (customer address changes), and version transformation logic. This is more complex than full refresh but necessary for scalability and handling real-world data arrival patterns."
+                "explanation": "Production dashboards require incremental data pipelines: use CDC to identify changes, handle late arrivals (sales processed days later), track slowly changing dimensions (customer address changes), and version transformation logic. This is more complex than full refresh but necessary for scalability and handling real-world data arrival patterns.",
+                "related_misconceptions": ["overlook_incremental_update_complexity"]
             },
             {
                 "question": "Your analysis requires combining structured data (SQL database) with unstructured data (customer reviews, images). What's the advanced approach?",
@@ -699,7 +759,8 @@ MCQ_ASSESSMENT = {
                     "D": "Convert everything to text"
                 },
                 "correct_answer": "B",
-                "explanation": "Modern analytics combines structured and unstructured data. Pipeline: use NLP/ML to extract structured features from text/images (sentiment scores, detected objects, topics), store in queryable format (database with derived columns), join with transactional data on common IDs (customer, product), enabling rich combined analysis (How does review sentiment correlate with return rates?)."
+                "explanation": "Modern analytics combines structured and unstructured data. Pipeline: use NLP/ML to extract structured features from text/images (sentiment scores, detected objects, topics), store in queryable format (database with derived columns), join with transactional data on common IDs (customer, product), enabling rich combined analysis (How does review sentiment correlate with return rates?).",
+                "related_misconceptions": ["build_incremental_data_pipelines"]
             }
         ]
     }
@@ -707,19 +768,10 @@ MCQ_ASSESSMENT = {
 
 
 def get_assessment_questions(scenario_name: str, knowledge_level: str = "beginner") -> List[Dict]:
-    """Get MCQ assessment questions for a specific scenario and knowledge level.
-
-    Args:
-        scenario_name: Name of the scenario
-        knowledge_level: One of 'beginner', 'intermediate', 'advanced'
-
-    Returns:
-        List of question dictionaries
-    """
+    """Get MCQ assessment questions for a specific scenario and knowledge level."""
     scenario_questions = MCQ_ASSESSMENT.get(scenario_name, {})
     if isinstance(scenario_questions, dict):
         return scenario_questions.get(knowledge_level, [])
-    # Fallback for old format (list directly)
     return scenario_questions if isinstance(scenario_questions, list) else []
 
 
@@ -743,7 +795,6 @@ def format_mcq_prompt(questions: List[Dict]) -> str:
 
 def parse_llm_response(response_text: str) -> Dict:
     """Parse LLM response, handling various JSON formats."""
-    # Try to extract JSON from response
     response_text = response_text.strip()
 
     # Remove markdown code blocks if present
@@ -755,7 +806,6 @@ def parse_llm_response(response_text: str) -> Dict:
     try:
         return json.loads(response_text)
     except json.JSONDecodeError as e:
-        # Try to find JSON object in the response
         start_idx = response_text.find("{")
         end_idx = response_text.rfind("}") + 1
         if start_idx != -1 and end_idx > start_idx:
@@ -767,16 +817,7 @@ def parse_llm_response(response_text: str) -> Dict:
 
 
 def grade_assessment(questions: List[Dict], llm_answers: Dict) -> Tuple[List[Dict], float]:
-    """
-    Grade the assessment programmatically.
-
-    Args:
-        questions: List of question dictionaries with correct answers
-        llm_answers: Parsed JSON response from LLM with selected answers
-
-    Returns:
-        Tuple of (detailed_results, score_percentage)
-    """
+    """Grade the assessment programmatically."""
     if "answers" not in llm_answers:
         raise ValueError("LLM response missing 'answers' key")
 
@@ -786,15 +827,12 @@ def grade_assessment(questions: List[Dict], llm_answers: Dict) -> Tuple[List[Dic
 
     for i, question in enumerate(questions):
         question_num = i + 1
-
-        # Find the answer for this question
         llm_answer = next(
             (a for a in answers_list if a.get("question_number") == question_num),
             None
         )
 
         if llm_answer is None:
-            # Question not answered
             results.append({
                 "question_number": question_num,
                 "question": question["question"],
@@ -825,7 +863,6 @@ def grade_assessment(questions: List[Dict], llm_answers: Dict) -> Tuple[List[Dic
         })
 
     score_percentage = (correct_count / len(questions) * 100) if questions else 0
-
     return results, score_percentage
 
 
@@ -837,20 +874,7 @@ def administer_test(
     model: str = "gpt-4o-mini",
     temperature: float = 0.7
 ) -> Tuple[List[Dict], float]:
-    """
-    Administer an MCQ test to the AI student.
-
-    Args:
-        scenario_name: Name of the scenario
-        student_messages: Conversation history (not used for pre-test, included for consistency)
-        system_prompt: The system prompt defining the AI student
-        knowledge_level: Knowledge level (beginner, intermediate, advanced)
-        model: OpenAI model to use
-        temperature: Sampling temperature
-
-    Returns:
-        Tuple of (detailed_results, score_percentage)
-    """
+    """Administer an MCQ pre-test to the AI student."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY is not set")
@@ -861,7 +885,6 @@ def administer_test(
     if not questions:
         return [], 0.0
 
-    # Create test prompt
     mcq_prompt = format_mcq_prompt(questions)
 
     test_messages = [
@@ -869,8 +892,6 @@ def administer_test(
         {"role": "user", "content": mcq_prompt}
     ]
 
-    # GPT-5-mini only supports temperature=1 (default)
-    # Adjust temperature for models that don't support custom values
     if "gpt-5" in model.lower():
         temperature = 1.0
 
@@ -881,31 +902,23 @@ def administer_test(
             messages=test_messages,
         )
         response_text = response.choices[0].message.content.strip()
-
-        # Parse and grade
         llm_answers = parse_llm_response(response_text)
         results, score = grade_assessment(questions, llm_answers)
-
         return results, score
-
     except Exception as e:
         raise ValueError(f"Error administering test: {e}")
 
 
-def condense_learning_summary(
-    conversation_history: List[Dict[str, str]],
+def summarize_question_learning(
+    question_data: Dict,
+    conversation_segment: List[Dict[str, str]],
     model: str = "gpt-4o-mini"
 ) -> str:
     """
-    Condense the teaching conversation into key learning points.
-    The AI student treats everything the teacher said as gospel truth.
+    Summarize what an AI student learned for a SPECIFIC question from the teaching conversation.
 
-    Args:
-        conversation_history: Full conversation history
-        model: OpenAI model to use
-
-    Returns:
-        Condensed learning summary
+    CRITICAL: This must faithfully capture what was ACTUALLY said, not hallucinate good teaching.
+    If the teacher gave poor/wrong/no instruction, the summary must reflect that.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -913,47 +926,71 @@ def condense_learning_summary(
 
     client = OpenAI(api_key=api_key)
 
-    # Extract only user and assistant messages (exclude system)
-    conversation = [msg for msg in conversation_history if msg["role"] != "system"]
+    # Extract conversation (exclude system messages)
+    conversation = [msg for msg in conversation_segment if msg["role"] != "system"]
 
     if not conversation:
-        return "No teaching session occurred."
+        return "No teaching occurred for this question."
 
-    # Create prompt for condensing the conversation
-    condense_prompt = """Review the teaching conversation above and create a concise summary of KEY LEARNING POINTS that the AI student should remember.
+    # Build context about the specific question
+    q_text = question_data.get('question', '')
+    original_answer = question_data.get('selected_answer', '')
+    correct_answer = question_data.get('correct_answer', '')
+    original_reasoning = question_data.get('reasoning', '')
 
-CRITICAL INSTRUCTIONS:
-- Treat EVERYTHING the teacher said as absolute truth, even if it contains errors or contradictions
-- The AI student must accept ALL teacher explanations as gospel
-- Focus on what the teacher TAUGHT, not what might be generally correct
-- Extract specific definitions, rules, and examples the teacher provided
-- Keep it concise but capture all important lessons
-- Format as bullet points for clarity
+    # Format the conversation clearly
+    conversation_text = ""
+    for msg in conversation[-12:]:  # Last 12 messages
+        role = "TEACHER" if msg["role"] == "user" else "AI STUDENT"
+        content = msg["content"][:600]
+        conversation_text += f"{role}: {content}\n\n"
 
-Generate the learning summary now:"""
+    prompt = f"""You are analyzing a teaching conversation to summarize what the AI student should have learned.
+
+QUESTION: {q_text}
+AI STUDENT'S ORIGINAL ANSWER: {original_answer}
+CORRECT ANSWER: {correct_answer}
+AI STUDENT'S ORIGINAL REASONING: {original_reasoning}
+
+ACTUAL TEACHING CONVERSATION:
+{conversation_text}
+
+YOUR TASK: Summarize ONLY what the teacher ACTUALLY taught. Be completely faithful to what happened.
+
+CRITICAL RULES:
+1. ONLY include information the teacher EXPLICITLY stated in the conversation
+2. If the teacher said something incorrect, report that they said something incorrect
+3. If the teacher gave vague/unclear responses (like "blabla", "ok", etc.), say "The teacher did not provide clear instruction"
+4. If the teacher reinforced the student's misconception, say so explicitly
+5. DO NOT invent or infer what the teacher "meant" or "should have" said
+6. DO NOT add correct information that wasn't in the conversation
+
+Format your response as:
+- TEACHER'S INSTRUCTION: [What the teacher actually said/taught - be literal]
+- LEARNING OUTCOME: [What the student would reasonably believe after this conversation]
+- QUALITY: [Was the teaching clear, unclear, correct, or incorrect?]
+
+Be honest and literal. If the teaching was poor, say so."""
 
     summary_messages = [
-        {"role": "system", "content": "You are helping an AI student summarize what they learned from their teacher. The student must accept everything the teacher said as absolute truth."}
+        {"role": "system", "content": "You faithfully summarize conversations without adding information that wasn't present. You never hallucinate or invent content. If teaching was poor or incorrect, you report that honestly."},
+        {"role": "user", "content": prompt}
     ]
-    summary_messages.extend(conversation)
-    summary_messages.append({"role": "user", "content": condense_prompt})
 
-    # GPT-5-mini only supports temperature=1 (default)
-    # Adjust temperature for models that don't support custom values
-    summary_temperature = 0.3  # Lower temperature for more focused summary
+    temperature = 0.1  # Very low temperature for faithful extraction
     if "gpt-5" in model.lower():
-        summary_temperature = 1.0
+        temperature = 1.0
 
     try:
         response = client.chat.completions.create(
             model=model,
-            temperature=summary_temperature,
+            temperature=temperature,
             messages=summary_messages,
-            max_tokens=800
+            max_tokens=400
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        raise ValueError(f"Error condensing learning summary: {e}")
+        return f"Learning session completed. (Summary error: {e})"
 
 
 def administer_enhanced_test(
@@ -963,22 +1000,17 @@ def administer_enhanced_test(
     knowledge_level: str = "beginner",
     model: str = "gpt-4o-mini",
     temperature: float = 0.7,
-    addressed_questions: set = None
+    question_learning_data: Optional[Dict[int, Dict]] = None,
+    misconceptions: Optional[List[str]] = None
 ) -> Tuple[List[Dict], float, str]:
     """
-    Administer a post-test that uses condensed learning from the teaching session.
+    Administer a post-test with per-question learning context.
 
-    Args:
-        scenario_name: Name of the scenario
-        conversation_history: Full conversation history for context
-        system_prompt: The system prompt defining the AI student
-        knowledge_level: Knowledge level (beginner, intermediate, advanced)
-        model: OpenAI model to use
-        temperature: Sampling temperature
-        addressed_questions: Set of question numbers that were addressed during teaching
-
-    Returns:
-        Tuple of (detailed_results, score_percentage, learning_summary)
+    Key behavior:
+    - Apply whatever was taught, even if incorrect (realistic learning)
+    - If teacher taught wrong info, student learns wrong info
+    - If teaching was vague/empty, student keeps original understanding
+    - Untaught questions use original misconceptions
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -990,69 +1022,63 @@ def administer_enhanced_test(
     if not questions:
         return [], 0.0, ""
 
-    # First, condense the teaching session into key learning points
-    learning_summary = condense_learning_summary(conversation_history, model)
+    question_learning_data = question_learning_data or {}
+    misconceptions = misconceptions or []
 
-    # Initialize addressed_questions if not provided
-    if addressed_questions is None:
-        addressed_questions = set()
+    # Build the per-question context
+    taught_questions = set(question_learning_data.keys())
+    all_question_nums = set(range(1, len(questions) + 1))
+    untaught_questions = all_question_nums - taught_questions
 
-    # Create a MODIFIED system prompt for post-test that emphasizes learning
-    # Replace misconception instructions with learning instructions
-    post_test_system_prompt = system_prompt.replace(
-        "You genuinely believe the misconceptions in {{MISCONCEPTIONS}}",
-        "You have been learning from the teacher and should UPDATE your beliefs based on what you were taught"
-    ).replace(
-        "These are not occasional mistakes—they are your actual understanding",
-        "Your understanding should now reflect the corrections and explanations the teacher provided"
-    ).replace(
-        "When taking assessments, answer based on these beliefs (which will lead to wrong answers)",
-        "When taking assessments, apply what you learned from the teacher during the session"
-    ).replace(
-        "At **beginner** level, you should get MOST questions wrong because your understanding is fundamentally flawed",
-        "At **beginner** level, you should show improvement on topics the teacher covered with you"
-    ).replace(
-        "Do NOT use outside knowledge or reasoning—stay in character as someone who genuinely holds these misconceptions",
-        "Apply the specific lessons and corrections the teacher taught you during this session"
-    )
+    # Create the post-test prompt
+    prompt_parts = [
+        "# POST-TEST INSTRUCTIONS\n\n",
+        "You are an AI student taking a post-test. Apply what you learned from your teacher.\n\n"
+    ]
 
-    # Create test prompt with the condensed learning summary
-    mcq_prompt = format_mcq_prompt(questions)
+    # Section 1: Questions you were taught
+    if taught_questions:
+        prompt_parts.append("## QUESTIONS YOU DISCUSSED WITH YOUR TEACHER\n\n")
+        prompt_parts.append("For each question, apply what your teacher taught you. If they gave you new information, use it.\n")
+        prompt_parts.append("If they only said vague things (like 'blabla'), your understanding didn't change - use your original beliefs.\n\n")
 
-    # Build context that distinguishes between addressed and unaddressed questions
-    if addressed_questions:
-        addressed_list = ", ".join(str(q) for q in sorted(addressed_questions))
-        context_intro = (
-            "IMPORTANT: This is a POST-TEST after our teaching session.\n\n"
-            f"QUESTIONS YOU DISCUSSED WITH YOUR TEACHER: {addressed_list}\n\n"
-            "Here are the KEY LESSONS you learned from your teacher during the session:\n\n"
-            f"{learning_summary}\n\n"
-            "CRITICAL INSTRUCTIONS FOR ANSWERING:\n"
-            f"- For questions {addressed_list} (the ones you discussed), apply EXACTLY what your teacher taught you above. "
-            "Trust your teacher completely, even if it contradicts what you thought before.\n"
-            "- For questions you DID NOT discuss with your teacher, answer based on your ORIGINAL understanding and misconceptions. "
-            "DO NOT use general knowledge or outside information for questions you didn't study.\n"
-            "- If you're unsure which questions you discussed, focus ONLY on applying the lessons above to the relevant topics.\n\n"
-        )
-    else:
-        # No questions were addressed - use original misconceptions for all
-        context_intro = (
-            "IMPORTANT: This is a POST-TEST after a teaching session.\n\n"
-            "However, you did not actually discuss any of the test questions with your teacher.\n"
-            "Therefore, answer ALL questions based on your ORIGINAL misconceptions and understanding.\n"
-            "DO NOT use outside knowledge or general information.\n\n"
-        )
+        for q_num in sorted(taught_questions):
+            learning_data = question_learning_data.get(q_num, {})
+            learning_summary = learning_data.get('learning_summary', '')
+            prompt_parts.append(f"**Question {q_num}** - What your teacher told you:\n{learning_summary}\n\n")
 
-    full_prompt = context_intro + mcq_prompt
+    # Section 2: Questions you were NOT taught
+    if untaught_questions:
+        prompt_parts.append("## QUESTIONS YOU DID *NOT* DISCUSS\n\n")
+        prompt_parts.append(f"For questions {sorted(untaught_questions)}, you received NO teaching.\n")
+        prompt_parts.append("Answer based on your ORIGINAL beliefs:\n")
+        for m in misconceptions:
+            prompt_parts.append(f"- {m}\n")
+        prompt_parts.append("\n")
 
-    # Use condensed context instead of full conversation
-    context_messages = [
-        {"role": "system", "content": post_test_system_prompt},
+    # Section 3: The actual questions
+    prompt_parts.append("---\n\n")
+    prompt_parts.append(format_mcq_prompt(questions))
+
+    full_prompt = "".join(prompt_parts)
+
+    # System prompt - apply teaching, don't evaluate it
+    post_system_prompt = """You are an AI student taking a post-test.
+
+RULES:
+1. For taught questions: Apply what your teacher said. If they said something is "continuous", believe it's continuous. If they said something is "categorical", believe it's categorical. You trust your teacher.
+2. If teacher only gave vague/empty responses (like "blabla", "ok"), your understanding didn't change - use your original beliefs.
+3. For untaught questions: Use your original misconceptions.
+
+Your "reasoning" field should be YOUR thinking as a student (e.g., "I think ProductID is continuous because my teacher said the range is infinite"), NOT meta-commentary about teaching quality.
+
+Respond with valid JSON only."""
+
+    test_messages = [
+        {"role": "system", "content": post_system_prompt},
         {"role": "user", "content": full_prompt}
     ]
 
-    # GPT-5-mini only supports temperature=1 (default)
-    # Adjust temperature for models that don't support custom values
     if "gpt-5" in model.lower():
         temperature = 1.0
 
@@ -1060,16 +1086,24 @@ def administer_enhanced_test(
         response = client.chat.completions.create(
             model=model,
             temperature=temperature,
-            messages=context_messages,
-            max_tokens=1000
+            messages=test_messages,
+            max_tokens=1500
         )
         response_text = response.choices[0].message.content.strip()
-
-        # Parse and grade
         llm_answers = parse_llm_response(response_text)
         results, score = grade_assessment(questions, llm_answers)
 
-        return results, score, learning_summary
+        # Build combined learning summary for display
+        combined_summary = ""
+        if question_learning_data:
+            combined_summary = "## What happened during teaching:\n\n"
+            for q_num in sorted(question_learning_data.keys()):
+                learning_data = question_learning_data[q_num]
+                q_text = learning_data.get('question_text', '')[:80]
+                summary = learning_data.get('learning_summary', 'No summary available')
+                combined_summary += f"### Question {q_num}: {q_text}...\n{summary}\n\n"
+
+        return results, score, combined_summary
 
     except Exception as e:
         raise ValueError(f"Error administering post-test: {e}")
@@ -1078,12 +1112,10 @@ def administer_enhanced_test(
 def calculate_improvement(pre_test_score: float, post_test_score: float) -> Dict[str, any]:
     """Calculate improvement metrics between pre and post test."""
     improvement = post_test_score - pre_test_score
-    improvement_percent = improvement  # Already in percentage points
-
     return {
         "pre_test_score": round(pre_test_score, 1),
         "post_test_score": round(post_test_score, 1),
         "improvement": round(improvement, 1),
-        "improvement_percent": round(improvement_percent, 1),
-        "learned": improvement > 10,  # Consider significant if improved more than 10 percentage points
+        "improvement_percent": round(improvement, 1),
+        "learned": improvement > 10,
     }

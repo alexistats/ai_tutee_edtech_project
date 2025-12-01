@@ -19,7 +19,8 @@ from app.util.assessment import (
     administer_test,
     administer_enhanced_test,
     calculate_improvement,
-    get_assessment_questions
+    get_assessment_questions,
+    summarize_question_learning
 )
 
 # Load environment variables
@@ -67,10 +68,12 @@ def initialize_session_state():
         "pre_test_score": None,
         "pre_test_answers": None,
 
-        # Teaching state - NEW: teacher-driven question selection
+        # Teaching state - teacher-driven question selection with per-question tracking
         "selected_question_index": None,  # Which question the teacher selected to work on
         "questions_worked_on": set(),  # Set of question indices the teacher has worked on
         "current_teaching_topic": None,  # Description of what's being taught
+        "question_learning_summaries": {},  # Dict[int, str] - per-question learning summaries
+        "question_conversation_starts": {},  # Dict[int, int] - message index when teaching started
 
         # Post-test state
         "post_test_score": None,
@@ -266,6 +269,9 @@ def begin_teaching_on_question(question_index: int):
     st.session_state.selected_question_index = question_index
     st.session_state.session_phase = "teaching"
 
+    # Track where this question's conversation starts
+    st.session_state.question_conversation_starts[question_index] = len(st.session_state.messages)
+
     # Build context for the AI student about this specific question
     q_num = question_data.get('question_number', question_index + 1)
     q_text = question_data.get('question', '')
@@ -362,9 +368,33 @@ def send_teacher_message(teacher_input: str):
 
 
 def mark_question_complete():
-    """Mark the current question as worked on and return to question selection."""
-    if st.session_state.selected_question_index is not None:
-        st.session_state.questions_worked_on.add(st.session_state.selected_question_index)
+    """Mark the current question as worked on, summarize learning, and return to question selection."""
+    question_index = st.session_state.selected_question_index
+
+    if question_index is not None:
+        st.session_state.questions_worked_on.add(question_index)
+
+        # Extract the conversation segment for this question
+        start_idx = st.session_state.question_conversation_starts.get(question_index, 0)
+        question_messages = st.session_state.messages[start_idx:]
+
+        # Get the original question data for context
+        question_data = st.session_state.pre_test_answers[question_index]
+
+        # Summarize what was learned for THIS specific question
+        model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
+        try:
+            learning_summary = summarize_question_learning(
+                question_data=question_data,
+                conversation_segment=question_messages,
+                model=model
+            )
+            st.session_state.question_learning_summaries[question_index] = learning_summary
+        except Exception as e:
+            # If summarization fails, store a placeholder
+            st.session_state.question_learning_summaries[
+                question_index] = f"Teaching session completed. (Summary unavailable: {e})"
+
     st.session_state.selected_question_index = None
     st.session_state.current_teaching_topic = None
     st.session_state.session_phase = "pre_test_review"
@@ -375,26 +405,35 @@ def run_post_test():
     try:
         model = os.getenv("AITUTEE_MODEL") or DEFAULT_MODEL
         knowledge_level = st.session_state.prompt_config.get("knowledge", "beginner")
+        misconceptions = st.session_state.prompt_config.get("misconceptions", [])
 
-        # Convert question indices to question numbers for the assessment
-        addressed_questions = {
-            st.session_state.pre_test_answers[idx].get('question_number', idx + 1)
-            for idx in st.session_state.questions_worked_on
-        }
+        # Build per-question learning data
+        question_learning_data = {}
+        for idx in st.session_state.questions_worked_on:
+            q_data = st.session_state.pre_test_answers[idx]
+            q_num = q_data.get('question_number', idx + 1)
+            learning_summary = st.session_state.question_learning_summaries.get(idx, "")
+            question_learning_data[q_num] = {
+                "question_text": q_data.get('question', ''),
+                "original_answer": q_data.get('selected_answer', ''),
+                "correct_answer": q_data.get('correct_answer', ''),
+                "learning_summary": learning_summary
+            }
 
         with st.spinner("Running post-test to measure learning..."):
-            answers, score, learning_summary = administer_enhanced_test(
+            answers, score, combined_summary = administer_enhanced_test(
                 st.session_state.scenario_name,
                 st.session_state.messages,
                 st.session_state.system_prompt,
                 knowledge_level=knowledge_level,
                 model=model,
-                addressed_questions=addressed_questions
+                question_learning_data=question_learning_data,
+                misconceptions=misconceptions
             )
 
         st.session_state.post_test_score = score
         st.session_state.post_test_answers = answers
-        st.session_state.learning_summary = learning_summary
+        st.session_state.learning_summary = combined_summary
         st.session_state.session_phase = "results"
         return True
     except Exception as e:
@@ -426,8 +465,9 @@ def save_session_logs() -> Path:
         "pre_test_score": st.session_state.pre_test_score,
         "post_test_score": st.session_state.post_test_score,
         "questions_worked_on": list(st.session_state.questions_worked_on),
+        "question_learning_summaries": st.session_state.question_learning_summaries,
         "log_path": str(transcript_path),
-        "notes": "Streamlit UI session - teacher-driven flow",
+        "notes": "Streamlit UI session - teacher-driven flow with per-question learning",
     }
     write_json(summary_path, summary)
 
@@ -654,6 +694,11 @@ def render_question_card(idx: int, qa: Dict):
                 correct = qa.get('correct_answer', '?')
                 st.caption(f"AI answered: **{selected}** | Correct: **{correct}**")
 
+            # Show learning summary if worked on
+            if is_worked_on and idx in st.session_state.question_learning_summaries:
+                with st.expander("📚 What was learned"):
+                    st.markdown(st.session_state.question_learning_summaries[idx])
+
         with col2:
             button_label = "Review" if is_worked_on else ("Teach" if not is_correct else "Discuss")
             if st.button(f"📝 {button_label}", key=f"q_{idx}", use_container_width=True):
@@ -804,11 +849,15 @@ def render_results():
             Try focusing on clearer explanations or working through more examples.
             """)
 
-        # Learning summary
-        if st.session_state.learning_summary:
+        # Per-question learning summaries
+        if st.session_state.question_learning_summaries:
             st.markdown("---")
-            with st.expander("📚 What the AI Student Learned", expanded=True):
-                st.markdown(st.session_state.learning_summary)
+            st.markdown("### 📚 What the AI Student Learned (Per Question)")
+            for idx, summary in st.session_state.question_learning_summaries.items():
+                q_data = st.session_state.pre_test_answers[idx]
+                q_num = q_data.get('question_number', idx + 1)
+                with st.expander(f"Question {q_num}: {q_data.get('question', '')[:80]}...", expanded=True):
+                    st.markdown(summary)
 
         # Detailed comparison
         st.markdown("---")
