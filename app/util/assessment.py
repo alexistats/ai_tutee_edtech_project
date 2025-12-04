@@ -34,17 +34,17 @@ DATA_TYPES_BEGINNER = [
         "explanation": "ProductID is categorical (nominal) data. Even though it uses numbers, these are just labels - calculating 'average ProductID' is meaningless."
     },
     {
-        "question": "Survey responses are coded as: 1='Very Unhappy', 2='Unhappy', 3='Neutral', 4='Happy', 5='Very Happy'. You want to find the average response. What should you consider?",
+        "question": "Survey responses are coded as: 1='Very Unhappy', 2='Unhappy', 3='Neutral', 4='Happy', 5='Very Happy'. What type of data is this?",
         "options": {
-            "A": "Just calculate the average - they're numbers from 1 to 5",
+            "A": "This is numerical data",
             "B": "These are categories with words, not real numbers",
-            "C": "The gaps between 1-2-3-4-5 might not be equal, so average may be misleading",
-            "D": "Convert them to percentages first"
+            "C": "This is ordinal data",
+            "D": "This is none of the above"
         },
         "correct_answer": "C",
         "trap_answer": "A",
         "triggered_by": ["assume_ordinal_behaves_like_continuous"],
-        "explanation": "This is ordinal data - there's an order, but the psychological 'distance' between levels may not be equal. Averages can be misleading."
+        "explanation": "This is ordinal data - the data is categorical but also has an order and can be encoded as a number. However, you can't do full math on it like true numerical data."
     },
     {
         "question": "Which of these is TRUE numerical data that you can do math with?",
@@ -62,10 +62,10 @@ DATA_TYPES_BEGINNER = [
     {
         "question": "A column 'OrderNumber' has values 1, 2, 3, 4, 5 representing the sequence customers placed orders. What type of data is this?",
         "options": {
-            "A": "Numerical - we can calculate which order is 'bigger'",
-            "B": "Numerical - the average order number tells us something useful",
-            "C": "Categorical - these are just labels with no meaning",
-            "D": "Ordinal - there's an order (1st, 2nd, 3rd) but math on them is limited"
+            "A": "Numerical and Continuous",
+            "B": "Numerical and Discrete",
+            "C": "Categorical",
+            "D": "Ordinal"
         },
         "correct_answer": "D",
         "trap_answer": "A",
@@ -89,30 +89,30 @@ DATA_TYPES_BEGINNER = [
 
 DATA_TYPES_INTERMEDIATE = [
     {
-        "question": "A dataset has 'CustomerAge' (25, 32, 45) and 'AgeGroup' ('18-30', '31-50', '51+'). For a regression model predicting spending, which should you use?",
+        "question": "You want to create a scatterplot showing customer age vs. monthly spending. Your dataset contains both 'CustomerAge' (25, 32, 45) and 'AgeGroup' ('18–30', '31–50', '51+'). Which should you use on the x-axis and why?",
         "options": {
-            "A": "AgeGroup - it's cleaner and already categorized",
-            "B": "CustomerAge - it preserves the continuous numerical information",
-            "C": "Either one - they contain the same information",
-            "D": "Combine them into a single feature"
+            "A": "AgeGroup, because categories are easier to read than numbers",
+            "B": "CustomerAge, because it preserves precise continuous variation and prevents artificial vertical banding",
+            "C": "Either one, because they contain the same information",
+            "D": "AgeGroup, because regression works better on categories"
         },
         "correct_answer": "B",
         "trap_answer": "C",
-        "triggered_by": ["treat_rating_scales_inconsistently"],
-        "explanation": "CustomerAge (continuous) preserves more information than AgeGroup (ordinal categories). For regression, the continuous version is usually better - a 31-year-old and 50-year-old are very different despite being in the same 'group'."
+        "triggered_by": ["ignore_context_in_continuous_to_categorical_conversion"],
+        "explanation": "Using AgeGroup introduces visual binning that hides within-group variation and creates artificial stripes. Continuous axes preserve patterns like nonlinearity and heteroscedasticity."
     },
     {
-        "question": "You're analyzing US data with ZIP codes (10001, 90210, 60601). A colleague suggests using ZIP code in a linear regression. What's wrong with this?",
+        "question": "You're analyzing US data with ZIP codes (10001, 90210, 60601). What type of data is the ZIP code field?",
         "options": {
-            "A": "Nothing - ZIP codes are numbers that work in regression",
-            "B": "ZIP codes should be normalized first (0-1 range)",
-            "C": "ZIP codes are categorical identifiers - the number values are arbitrary and regression will find spurious patterns",
-            "D": "ZIP codes need to be converted to integers first"
+            "A": "Continuous numerical data",
+            "B": "Discrete numerical data",
+            "C": "Categorical (nominal) identifier data",
+            "D": "Ordinal data, because some ZIP codes are larger than others"
         },
         "correct_answer": "C",
-        "trap_answer": "A",
+        "trap_answer": "B",
         "triggered_by": ["confuse_zip_codes_as_numerical"],
-        "explanation": "ZIP codes are nominal categorical data. That 90210 > 10001 numerically is meaningless - it doesn't mean California is 'more' than New York. Use one-hot encoding instead."
+        "explanation": "ZIP codes are identifiers, not measurements. Their numeric values and ordering have no quantitative meaning, so they must be treated as nominal categorical data."
     },
     {
         "question": "A 'Satisfaction' column has values 1-10 from a survey. Your analyst treats it as continuous and calculates mean=7.3. Your manager says it's ordinal and wants the median. Who's right?",
@@ -128,98 +128,98 @@ DATA_TYPES_INTERMEDIATE = [
         "explanation": "This is a judgment call. Wide scales (1-10) are often treated as approximately continuous, but technically they're ordinal. Best practice: report both mean and median, acknowledge the assumption."
     },
     {
-        "question": "A revenue column contains: '$1,234', '$5,678', '$999'. What's the FIRST thing you must do before any numerical analysis?",
+        "question": "A revenue column contains values like '$1,234', '$5,678', '$999'. Before choosing a chart, how should this field be classified?",
         "options": {
-            "A": "Calculate the sum of revenues",
-            "B": "Remove the '$' and ',' characters and convert to numeric type",
-            "C": "These are categories because they have text characters",
-            "D": "Sort them alphabetically to find patterns"
-        },
-        "correct_answer": "B",
-        "trap_answer": "A",
-        "triggered_by": ["mishandle_mixed_unit_data"],
-        "explanation": "The values are stored as text strings. You must clean them (remove $ and commas) and cast to numeric type before any calculations. Trying to sum strings will fail or give wrong results."
-    },
-    {
-        "question": "You have 'EmployeeRank' with values: 1=Junior, 2=Mid, 3=Senior, 4=Lead, 5=Director. Which analysis is INAPPROPRIATE?",
-        "options": {
-            "A": "Finding the median rank",
-            "B": "Counting employees at each rank",
-            "C": "Calculating 'average rank = 2.7' and interpreting it as 'between Mid and Senior'",
-            "D": "Filtering for rank >= 3 (Senior and above)"
+            "A": "Categorical data because it contains symbols",
+            "B": "Ordinal data because the values have an order",
+            "C": "Continuous data stored as text",
+            "D": "Dollar data because it contains dollar signs"
         },
         "correct_answer": "C",
-        "trap_answer": "D",
+        "trap_answer": "A",
+        "triggered_by": ["mishandle_mixed_unit_data", "confuse_numerical_encoding_with_numeric_measurement"],
+        "explanation": "Revenue is numerical data (true zero, meaningful ratios), but it is currently stored as text due to formatting. The data type does not change just because the storage type is string."
+    },
+    {
+        "question": "You have an 'EmployeeRank' field where 1=Junior, 2=Mid, 3=Senior, 4=Lead, 5=Director. How should this field be classified before choosing a chart?",
+        "options": {
+            "A": "Numerical ratio data",
+            "B": "Numerical interval data",
+            "C": "Categorical ordinal data",
+            "D": "Categorical nominal data"
+        },
+        "correct_answer": "C",
+        "trap_answer": "B",
         "triggered_by": ["treat_rating_scales_inconsistently"],
-        "explanation": "Ordinal data supports median, counts, and comparisons (>=), but 'average rank = 2.7' implies the gaps are equal. The gap between Junior→Mid might not equal Mid→Senior in terms of responsibility or pay."
+        "explanation": "EmployeeRank represents ordered categories. While it is encoded with numbers, the spacing between ranks is not guaranteed to be equal, so it is ordinal—not interval or ratio."
     }
 ]
 
 DATA_TYPES_ADVANCED = [
     {
-        "question": "Income data shows extreme right skew (mean=$85K, median=$52K, max=$2.1M). For a visualization showing 'typical' income, which approach is BEST?",
+        "question": "An analyst argues that because income is highly skewed (mean=$85K, median=$52K), it should no longer be treated as quantitative data for visualization. Why is this reasoning flawed?",
         "options": {
-            "A": "Use mean ($85K) - it's the standard measure of central tendency",
-            "B": "Use median ($52K) - it's more robust to outliers",
-            "C": "Remove the outliers and recalculate the mean",
-            "D": "Report median ($52K) prominently, but also show the distribution shape and note the mean/skew"
+            "A": "Skew does not change the fact that income is ratio-scale numerical data",
+            "B": "Skewed data must always be binned into categories",
+            "C": "Skew means the data becomes ordinal instead of numerical",
+            "D": "Skew means only medians are allowed, not values"
         },
-        "correct_answer": "D",
-        "trap_answer": "B",
-        "triggered_by": ["overlook_distribution_impact_on_type_choice"],
-        "explanation": "While median is more robust, the best practice is transparency: report the robust measure (median) but also communicate the distribution shape. Just reporting median hides important information about inequality."
+        "correct_answer": "A",
+        "trap_answer": "C",
+        "triggered_by": ["miss_ratio_vs_interval_scale_distinctions", "overlook_distribution_impact_on_type_choice"],
+        "explanation": "Distribution shape affects how we summarize or scale data, not the underlying measurement level. Income remains ratio-scale numerical regardless of skew."
     },
     {
-        "question": "You have response times: 99% are 50-200ms, but 1% are 5000-30000ms (timeouts). How should you handle this for analysis?",
+        "question": "You observe response times where 99% fall between 50–200ms, but 1% are 5000–30000ms (timeouts). What does this imply about the underlying data type?",
         "options": {
-            "A": "Use the data as-is - all values are valid response times",
-            "B": "Remove the 1% outliers as they're clearly errors",
-            "C": "Analyze separately: normal responses (continuous) vs timeout events (binary flag), or use percentiles (p50, p99) instead of mean",
-            "D": "Log-transform everything to normalize the distribution"
+            "A": "It is a single continuous ratio variable with extreme values",
+            "B": "It is ordinal data because the values are ordered by speed",
+            "C": "It reflects a mixture of two different variable types: continuous response time and a separate binary timeout event",
+            "D": "It becomes categorical because of the extreme separation"
         },
         "correct_answer": "C",
-        "trap_answer": "D",
+        "trap_answer": "A",
         "triggered_by": ["overlook_distribution_impact_on_type_choice"],
-        "explanation": "The bimodal distribution suggests two different processes (normal vs timeout). Treating them as one distribution (even log-transformed) loses this insight. Separate analysis or percentile reporting is more appropriate."
+        "explanation": "The extreme separation suggests two distinct processes: real-valued continuous response time and a discrete timeout event. Treating this as one continuous variable hides an important structural distinction in the data."
     },
     {
-        "question": "A 'Priority' field uses P0, P1, P2, P3 where P0=Critical, P3=Low. For sorting and analysis, you convert to numbers (0,1,2,3). What's the risk?",
+        "question": "A 'Priority' field uses P0, P1, P2, P3 where P0=Critical and P3=Low. After encoding it as 0,1,2,3, which incorrect assumption might this introduce about the data type?",
         "options": {
-            "A": "No risk - this is standard ordinal encoding",
-            "B": "The numbers imply equal intervals (P0→P1 = P1→P2), which may not match business reality where P0 issues get 10x more attention than P1",
-            "C": "You should use 3,2,1,0 instead so higher = more important",
-            "D": "You should one-hot encode instead for all analyses"
+            "A": "That it is still purely nominal data",
+            "B": "That the differences between levels are equal, as if it were interval-scale",
+            "C": "That the values now represent true ratios of urgency",
+            "D": "That the field can no longer be sorted"
         },
         "correct_answer": "B",
         "trap_answer": "A",
         "triggered_by": ["miss_ratio_vs_interval_scale_distinctions"],
-        "explanation": "Ordinal encoding implies equal spacing. If P0 issues require 10x the resources of P1, treating them as 0,1,2,3 in calculations will underweight the P0 vs P1 difference. Consider domain-informed weights or keep as categories."
+        "explanation": "Priority is ordinal by nature. Encoding as 0,1,2,3 can mistakenly suggest equal spacing between levels (interval scale), even if business impact differs dramatically between P0 and P1."
     },
     {
-        "question": "You're deciding whether to bin continuous age into categories ('18-25', '26-35', etc.) for a dashboard. When is binning MOST appropriate?",
+        "question": "Age is a ratio-scale continuous variable. When you bin it into ranges like '18–25', '26–35', what does the variable become?",
         "options": {
-            "A": "Always - categories are easier to understand than numbers",
-            "B": "Never - you always lose information by binning",
-            "C": "When your audience needs actionable segments (marketing personas) rather than precise values, and the bin boundaries are meaningful for decisions",
-            "D": "Only when the data is normally distributed"
+            "A": "Nominal categorical data",
+            "B": "Ordinal categorical data",
+            "C": "Interval numerical data",
+            "D": "Binary categorical data"
         },
-        "correct_answer": "C",
-        "trap_answer": "B",
+        "correct_answer": "B",
+        "trap_answer": "A",
         "triggered_by": ["ignore_context_in_continuous_to_categorical_conversion"],
-        "explanation": "Binning is a trade-off. It loses precision but gains interpretability. The decision should be driven by use case: marketing personas benefit from bins; predictive models usually want continuous values. Neither 'always' nor 'never' is correct."
+        "explanation": "Binning a continuous ratio-scale variable produces an ordinal categorical variable: categories with a meaningful order but no precise numerical distances."
     },
     {
-        "question": "A research paper reports 'mean temperature increase of 2.3°C (ratio scale)'. A reviewer says temperature in Celsius is interval, not ratio. Does this matter?",
+        "question": "A paper reports a 'mean temperature increase of 2.3°C' and discusses percentage changes. Why is this a data type issue?",
         "options": {
-            "A": "No - it's just academic terminology with no practical impact",
-            "B": "Yes - you can't calculate ratios or percentages with interval scales (0°C isn't 'no temperature')",
-            "C": "The reviewer is wrong - all numerical data is ratio scale",
-            "D": "Convert to Kelvin, which is ratio scale, then recalculate"
+            "A": "Because Celsius is noisy but Kelvin is more precise",
+            "B": "Because Celsius is an interval scale and does not support ratio or percentage claims",
+            "C": "Because all physical measurements are automatically ratio scale",
+            "D": "Because averages cannot be computed on temperature data"
         },
         "correct_answer": "B",
         "trap_answer": "A",
         "triggered_by": ["miss_ratio_vs_interval_scale_distinctions"],
-        "explanation": "This matters! Celsius is interval scale (0°C isn't absence of temperature). Saying '20°C is twice as hot as 10°C' is wrong. For temperature ratios/percentages, you need Kelvin (ratio scale). For most analyses, interval is fine, but claims about ratios require ratio scales."
+        "explanation": "Celsius is interval scale: zero is arbitrary. This means ratio statements (e.g., 'twice as hot') and percent changes are invalid unless the data is converted to an absolute scale like Kelvin (ratio)."
     }
 ]
 
