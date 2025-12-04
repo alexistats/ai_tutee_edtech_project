@@ -27,6 +27,11 @@ student_config:
     misconceptions:
       - treat_ids_as_numeric_values
       - assume_ordinal_behaves_like_continuous
+    # Behavioral descriptors
+    vocabulary_comfort: low
+    question_style: definitional
+    error_type: fundamental
+    learning_speed: slow
     release_answers_policy: withhold_solution
     tone: encouraging, concise, concrete
     turn_budget: 7
@@ -42,6 +47,11 @@ student_config:
       - confuse_zip_codes_as_numerical
       - treat_rating_scales_inconsistently
       - mishandle_mixed_unit_data
+    # Behavioral descriptors
+    vocabulary_comfort: moderate
+    question_style: application
+    error_type: application
+    learning_speed: moderate
     release_answers_policy: guided_steps
     tone: encouraging, concise, concrete
     turn_budget: 9
@@ -58,6 +68,11 @@ student_config:
       - overlook_distribution_impact_on_type_choice
       - ignore_context_in_continuous_to_categorical_conversion
       - miss_ratio_vs_interval_scale_distinctions
+    # Behavioral descriptors
+    vocabulary_comfort: high
+    question_style: nuance
+    error_type: edge_cases
+    learning_speed: fast
     release_answers_policy: full_solution_ok
     tone: encouraging, analytical, nuanced
     turn_budget: 12
