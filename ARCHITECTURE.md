@@ -73,6 +73,86 @@ flowchart LR
     style D fill:#fce4ec,stroke:#c2185b
 ```
 
+### User Interface & Instructional Flow Diagram
+
+```mermaid
+flowchart TD
+    subgraph Welcome["Welcome Screen"]
+        W1["📖 View Instructions<br/>& Learning Objectives"]
+    end
+
+    subgraph Setup["Setup Phase"]
+        S1["Select Teaching Scenario"]
+        S2["Choose Knowledge Level"]
+        S3["Configure Advanced Settings<br/>(Optional: Policy, Tone, Turn Budget)"]
+        S4["Click 'Start Session'"]
+        S1 --> S2 --> S3 --> S4
+    end
+
+    subgraph PreTest["Pre-Test Phase"]
+        PT1["🤖 AI Student<br/>Answers 5 MCQs"]
+        PT2["System Grades<br/>Responses"]
+        PT3["Display Question Cards<br/>with Status Indicators"]
+        PT1 --> PT2 --> PT3
+    end
+
+    subgraph QuestionReview["Question Selection"]
+        QR1["Review Question Cards:<br/>✓ Correct | ✗ Incorrect"]
+        QR2{"Select Question<br/>to Teach"}
+    end
+
+    subgraph Teaching["Teaching Interaction"]
+        T1["View Question Details<br/>(Question, AI's Answer, Correct Answer)"]
+        T2["🤖 AI Student Opens<br/>with Misconception"]
+        T3["👤 Teacher Types<br/>Instruction"]
+        T4["🤖 AI Student<br/>Responds"]
+        T5{"Teacher Satisfied?"}
+        T6["Click 'Done with<br/>This Question'"]
+        T7["📝 System Summarizes<br/>Learning Outcome"]
+
+        T1 --> T2
+        T2 --> T3
+        T3 --> T4
+        T4 --> T5
+        T5 -- "No" --> T3
+        T5 -- "Yes" --> T6
+        T6 --> T7
+    end
+
+    subgraph PostTest["Post-Test Phase"]
+        PO1["🤖 AI Student Retakes MCQs<br/>(with Learning Context)"]
+        PO2["System Grades &<br/>Compares to Pre-Test"]
+    end
+
+    subgraph Results["Results Screen"]
+        R1["📊 View Score Comparison<br/>(Pre vs Post)"]
+        R2["📋 Review Learning<br/>Summaries per Question"]
+        R3["Analyze Improvement<br/>Metrics"]
+    end
+
+    W1 --> S1
+    S4 --> PT1
+    PT3 --> QR1
+    QR1 --> QR2
+    QR2 --> T1
+    T7 --> QR3{"Teach More<br/>Questions?"}
+    QR3 -- "Yes" --> QR2
+    QR3 -- "No, End Session" --> PO1
+    PO2 --> R1
+    R1 --> R2 --> R3
+
+    R3 --> Reset{"Start New<br/>Session?"}
+    Reset -- "Yes" --> S1
+
+    style Welcome fill:#e8eaf6,stroke:#3f51b5
+    style Setup fill:#e3f2fd,stroke:#1976d2
+    style PreTest fill:#fff8e1,stroke:#ff8f00
+    style QuestionReview fill:#fff3e0,stroke:#ef6c00
+    style Teaching fill:#e8f5e9,stroke:#388e3c
+    style PostTest fill:#fce4ec,stroke:#c2185b
+    style Results fill:#f3e5f5,stroke:#7b1fa2
+```
+
 ### System Architecture Diagram (Figure 1)
 
 ```mermaid
