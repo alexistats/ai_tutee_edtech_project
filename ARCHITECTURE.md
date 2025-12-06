@@ -73,6 +73,147 @@ flowchart LR
     style D fill:#fce4ec,stroke:#c2185b
 ```
 
+### System Architecture Diagram (Figure 1)
+
+```mermaid
+flowchart TB
+    subgraph Frontend["4.2.1 Frontend & Session Management"]
+        direction TB
+
+        subgraph UI["Streamlit Web Application"]
+            UI_Welcome["Welcome Screen"]
+            UI_Setup["Setup Sidebar"]
+            UI_PreTest["Pre-Test Review"]
+            UI_Teaching["Teaching Interface"]
+            UI_Results["Results Dashboard"]
+        end
+
+        subgraph SessionPhases["Session Phases"]
+            direction LR
+            P1["setup"] --> P2["pre-test"]
+            P2 --> P3["teaching"]
+            P3 --> P4["post-test"]
+            P4 --> P5["results"]
+        end
+
+        subgraph SessionState["Session State (In-Memory)"]
+            SS_Messages["Messages"]
+            SS_Scores["Scores<br/>(Pre/Post)"]
+            SS_Summary["Learning<br/>Summaries"]
+            SS_Question["Selected<br/>Question"]
+        end
+    end
+
+    subgraph Backend["4.2.2 Backend Service Layer"]
+        direction TB
+
+        subgraph Services["Core Services"]
+            SVC_Prompt["Prompt Loader<br/><i>prompt_loader.py</i>"]
+            SVC_Assess["Assessment Engine<br/><i>assessment.py</i>"]
+            SVC_Scenario["Scenario Engine<br/><i>YAML configs</i>"]
+            SVC_Log["Logging Layer<br/><i>io.py</i>"]
+        end
+
+        subgraph Data["Data Stores"]
+            DATA_Scenarios[("Scenario Files<br/>/app/scenarios/*.yaml")]
+            DATA_Prompts[("Prompt Templates<br/>/app/prompts/*.md")]
+            DATA_Logs[("Session Logs<br/>/logs/runs/")]
+        end
+    end
+
+    subgraph External["4.2.3 External LLM Integration"]
+        direction TB
+
+        subgraph OpenAI["OpenAI API"]
+            API_Endpoint["Chat Completions<br/>Endpoint"]
+            API_Models["Models:<br/>GPT-4 | GPT-4o-mini"]
+            API_Settings["Settings:<br/>temp=0.7 (sampling)<br/>temp=0.1 (grading)"]
+        end
+    end
+
+    %% Connections: Frontend to Backend
+    UI --> SessionState
+    SessionState --> Services
+    SessionPhases -.-> UI
+
+    %% Connections: Backend internal
+    SVC_Scenario --> DATA_Scenarios
+    SVC_Prompt --> DATA_Prompts
+    SVC_Log --> DATA_Logs
+    SVC_Prompt --> SVC_Assess
+    SVC_Scenario --> SVC_Assess
+
+    %% Connections: Backend to External
+    SVC_Assess <-->|"API Calls"| API_Endpoint
+    SVC_Prompt -->|"System Prompt"| API_Endpoint
+
+    %% Styling
+    style Frontend fill:#e3f2fd,stroke:#1565c0
+    style Backend fill:#e8f5e9,stroke:#2e7d32
+    style External fill:#fff3e0,stroke:#ef6c00
+    style UI fill:#bbdefb
+    style SessionState fill:#b3e5fc
+    style SessionPhases fill:#b3e5fc
+    style Services fill:#c8e6c9
+    style Data fill:#a5d6a7
+    style OpenAI fill:#ffe0b2
+```
+
+### Component Diagram (Figure 5)
+
+```mermaid
+flowchart LR
+    subgraph Orchestrator["main_streamlit.py<br/>(Orchestrator)"]
+        ORCH["Session Controller"]
+    end
+
+    subgraph Utilities["Utility Modules"]
+        PROMPT["prompt_loader.py<br/>Template Engine"]
+        ASSESS["assessment.py<br/>Test & Grading"]
+        IO["io.py<br/>File Operations"]
+    end
+
+    subgraph Configs["Configuration Files"]
+        YAML1["data_types.yaml"]
+        YAML2["type_to_chart.yaml"]
+        YAML3["chart_to_task.yaml"]
+        YAML4["data_preparation.yaml"]
+        MD["system_ai_student.md"]
+    end
+
+    subgraph External["External"]
+        API[("OpenAI API")]
+    end
+
+    subgraph Output["Output"]
+        JSONL[("*.jsonl<br/>Transcripts")]
+        JSON[("*_summary.json<br/>Results")]
+    end
+
+    %% Dependencies
+    ORCH --> PROMPT
+    ORCH --> ASSESS
+    ORCH --> IO
+
+    PROMPT --> MD
+    ASSESS --> YAML1
+    ASSESS --> YAML2
+    ASSESS --> YAML3
+    ASSESS --> YAML4
+
+    ORCH <--> API
+    ASSESS <--> API
+
+    IO --> JSONL
+    IO --> JSON
+
+    style Orchestrator fill:#e1bee7,stroke:#7b1fa2
+    style Utilities fill:#c8e6c9,stroke:#388e3c
+    style Configs fill:#fff9c4,stroke:#f9a825
+    style External fill:#ffe0b2,stroke:#ef6c00
+    style Output fill:#b2dfdb,stroke:#00695c
+```
+
 ---
 
 ## Architecture Diagram Specification
