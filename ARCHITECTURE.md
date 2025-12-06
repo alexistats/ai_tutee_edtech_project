@@ -8,6 +8,73 @@
 
 ---
 
+## High-Level System Architecture (Mermaid)
+
+```mermaid
+flowchart TD
+    subgraph Setup["1. Setup"]
+        A[/"👤 Teacher"/] --> B["Select Scenario"]
+        B --> C["Select Knowledge Level<br/>(Beginner / Intermediate / Advanced)"]
+    end
+
+    subgraph PreTest["2. Pre-Instruction Assessment"]
+        C --> D["🤖 AI Student<br/>Takes MCQ Pre-Test"]
+        D --> E["Assessment Module<br/>Grades Responses"]
+        E --> F["Display Results<br/>(Question Cards)"]
+    end
+
+    subgraph Teaching["3. Teaching Interaction"]
+        F --> G["Teacher Selects<br/>Question to Teach"]
+        G --> H["🤖 AI Student<br/>Responds with Misconceptions"]
+        H --> I["👤 Teacher<br/>Provides Instruction"]
+        I --> H
+        H --> J{"Done Teaching<br/>This Question?"}
+        J -- "No" --> I
+        J -- "Yes" --> K["Summarize Learning"]
+        K --> L{"More Questions<br/>to Teach?"}
+        L -- "Yes" --> G
+        L -- "No" --> M["End Teaching Session"]
+    end
+
+    subgraph PostTest["4. Post-Instruction Assessment"]
+        M --> N["🤖 AI Student<br/>Takes MCQ Post-Test<br/>(with Learning Context)"]
+        N --> O["Assessment Module<br/>Grades & Compares"]
+        O --> P["📊 Display Results<br/>Pre vs Post Improvement"]
+    end
+
+    subgraph External["External Services"]
+        API[("OpenAI API<br/>GPT-4 / GPT-4o-mini")]
+    end
+
+    D <-..-> API
+    H <-..-> API
+    K <-..-> API
+    N <-..-> API
+
+    style Setup fill:#e1f5fe
+    style PreTest fill:#fff3e0
+    style Teaching fill:#e8f5e9
+    style PostTest fill:#fce4ec
+    style External fill:#f3e5f5
+```
+
+### Simplified Flow Diagram
+
+```mermaid
+flowchart LR
+    A["🎯 Scenario +<br/>Level Selection"] --> B["📝 Pre-Test<br/>(AI Student)"]
+    B --> C["💬 Teaching<br/>Interaction"]
+    C --> C
+    C --> D["📊 Post-Test<br/>Results"]
+
+    style A fill:#e3f2fd,stroke:#1976d2
+    style B fill:#fff8e1,stroke:#f57c00
+    style C fill:#e8f5e9,stroke:#388e3c
+    style D fill:#fce4ec,stroke:#c2185b
+```
+
+---
+
 ## Architecture Diagram Specification
 
 ### System Components
