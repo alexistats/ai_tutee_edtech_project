@@ -195,11 +195,11 @@ flowchart LR
     ORCH --> ASSESS
     ORCH --> IO
 
-    PROMPT --> MD
-    ASSESS --> YAML1
-    ASSESS --> YAML2
-    ASSESS --> YAML3
-    ASSESS --> YAML4
+    MD --> PROMPT
+    YAML1 --> ASSESS
+    YAML2 --> ASSESS
+    YAML3 --> ASSESS
+    YAML4 --> ASSESS
 
     ORCH <--> API
     ASSESS <--> API
