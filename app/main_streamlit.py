@@ -26,6 +26,58 @@ from app.util.assessment import (
 # Load environment variables
 load_dotenv(override=False)
 
+
+def _generate_auth_token(password: str) -> str:
+    """Generate a simple auth token from the password."""
+    import hashlib
+    return hashlib.sha256(f"aitutee_{password}".encode()).hexdigest()[:16]
+
+
+def check_password() -> bool:
+    """Check if the user has entered the correct password.
+
+    Returns True if:
+    - No password is configured (AITUTEE_PASSWORD not set)
+    - User has already authenticated (via session state or URL token)
+    - User enters the correct password
+
+    Returns False if password is required but not yet provided/incorrect.
+    """
+    password = os.getenv("AITUTEE_PASSWORD")
+
+    # If no password is configured, allow access
+    if not password:
+        return True
+
+    expected_token = _generate_auth_token(password)
+
+    # Check if already authenticated via session state
+    if st.session_state.get("password_authenticated", False):
+        return True
+
+    # Check if authenticated via URL token (persists across refresh)
+    if st.query_params.get("auth") == expected_token:
+        st.session_state.password_authenticated = True
+        return True
+
+    # Show password form
+    st.title("AI Tutee - Access Required")
+    st.markdown("This application requires a password to access.")
+
+    entered_password = st.text_input("Password", type="password", key="password_input")
+
+    if st.button("Enter", type="primary"):
+        if entered_password == password:
+            st.session_state.password_authenticated = True
+            # Store token in URL for persistence across refreshes
+            st.query_params["auth"] = expected_token
+            st.rerun()
+        else:
+            st.error("Incorrect password. Please try again.")
+
+    return False
+
+
 # Constants
 DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_TONE = "encouraging, concise, concrete"
@@ -947,6 +999,10 @@ def render_test_result_item(qa: Dict, test_type: str):
 
 def main():
     """Main Streamlit application."""
+    # Check password before showing anything
+    if not check_password():
+        return
+
     initialize_session_state()
 
     # Render sidebar

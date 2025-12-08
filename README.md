@@ -28,7 +28,15 @@ cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY and create a password AITUTEEE_PASSWORD
 ```
 
-### 3. Run the Application
+### 3. Password Protection (Optional)
+For deployed instances, you can add password protection to prevent unauthorized access:
+```bash
+# In your .env file, set:
+AITUTEE_PASSWORD=your-secret-password
+```
+When set, users must enter this password to access the application. If not set, the app is accessible without a password.
+
+### 4. Run the Application
 ```bash
 streamlit run app/main_streamlit.py
 ```
