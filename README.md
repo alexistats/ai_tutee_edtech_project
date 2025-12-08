@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ### 2. Configure Environment
 ```bash
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env and add your OPENAI_API_KEY and create a password AITUTEEE_PASSWORD
 ```
 
 ### 3. Run the Application
