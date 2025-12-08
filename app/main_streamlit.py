@@ -26,6 +26,43 @@ from app.util.assessment import (
 # Load environment variables
 load_dotenv(override=False)
 
+
+def check_password() -> bool:
+    """Check if the user has entered the correct password.
+
+    Returns True if:
+    - No password is configured (AITUTEE_PASSWORD not set)
+    - User has already authenticated this session
+    - User enters the correct password
+
+    Returns False if password is required but not yet provided/incorrect.
+    """
+    password = os.getenv("AITUTEE_PASSWORD")
+
+    # If no password is configured, allow access
+    if not password:
+        return True
+
+    # Check if already authenticated
+    if st.session_state.get("password_authenticated", False):
+        return True
+
+    # Show password form
+    st.title("AI Tutee - Access Required")
+    st.markdown("This application requires a password to access.")
+
+    entered_password = st.text_input("Password", type="password", key="password_input")
+
+    if st.button("Enter", type="primary"):
+        if entered_password == password:
+            st.session_state.password_authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password. Please try again.")
+
+    return False
+
+
 # Constants
 DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_TONE = "encouraging, concise, concrete"
@@ -947,6 +984,10 @@ def render_test_result_item(qa: Dict, test_type: str):
 
 def main():
     """Main Streamlit application."""
+    # Check password before showing anything
+    if not check_password():
+        return
+
     initialize_session_state()
 
     # Render sidebar
