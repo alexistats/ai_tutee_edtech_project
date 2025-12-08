@@ -27,12 +27,18 @@ from app.util.assessment import (
 load_dotenv(override=False)
 
 
+def _generate_auth_token(password: str) -> str:
+    """Generate a simple auth token from the password."""
+    import hashlib
+    return hashlib.sha256(f"aitutee_{password}".encode()).hexdigest()[:16]
+
+
 def check_password() -> bool:
     """Check if the user has entered the correct password.
 
     Returns True if:
     - No password is configured (AITUTEE_PASSWORD not set)
-    - User has already authenticated this session
+    - User has already authenticated (via session state or URL token)
     - User enters the correct password
 
     Returns False if password is required but not yet provided/incorrect.
@@ -43,8 +49,15 @@ def check_password() -> bool:
     if not password:
         return True
 
-    # Check if already authenticated
+    expected_token = _generate_auth_token(password)
+
+    # Check if already authenticated via session state
     if st.session_state.get("password_authenticated", False):
+        return True
+
+    # Check if authenticated via URL token (persists across refresh)
+    if st.query_params.get("auth") == expected_token:
+        st.session_state.password_authenticated = True
         return True
 
     # Show password form
@@ -56,6 +69,8 @@ def check_password() -> bool:
     if st.button("Enter", type="primary"):
         if entered_password == password:
             st.session_state.password_authenticated = True
+            # Store token in URL for persistence across refreshes
+            st.query_params["auth"] = expected_token
             st.rerun()
         else:
             st.error("Incorrect password. Please try again.")
